@@ -1,0 +1,36 @@
+<sdf version='1.9'>
+      <model name='sphere'>
+      <pose>0 0 0.0 0 0 0</pose>
+      <link name='sphere_link'>
+        <inertial>
+          <inertia>
+            <ixx>0.10000000000000001</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.10000000000000001</iyy>
+            <iyz>0</iyz>
+            <izz>0.10000000000000001</izz>
+          </inertia>
+          <mass>1</mass>
+          <pose>0 0 0 0 -0 0</pose>
+        </inertial>
+        <visual name='sphere_visual'>
+          <transparency>0.3</transparency>
+          <geometry>
+            <sphere>
+              <radius>0.5</radius>
+            </sphere>
+          </geometry>
+          <material>
+            <ambient>0.3 0.3 0.3 1</ambient>
+            <diffuse>0.2 1.0 0.2 1</diffuse>
+            <specular>1 1 1 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 -0 0</pose>
+        <enable_wind>false</enable_wind>
+      </link>
+      <static>true</static>
+      <self_collide>false</self_collide>
+    </model>
+</sdf>

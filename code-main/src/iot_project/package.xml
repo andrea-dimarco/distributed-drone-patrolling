@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>iot_project</name>
+  <version>1.0.0</version>
+  <description>IoT Project main package. Used only to store the launch file which will use all the packages together</description>
+  <maintainer email="trombetti@di.uniroma1.it">fede3751</maintainer>
+  <license>Apache 2.0</license>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

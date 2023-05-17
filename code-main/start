@@ -1,0 +1,11 @@
+#!/bin/bash
+
+if [ $# -eq 0 ]; then
+    sim_file='./sim_files/simple_simulation.sim'
+else
+    sim_file=$1
+fi
+
+colcon build --packages-select iot_project_solution_src
+source ./install/local_setup.bash
+ros2 launch iot_project launch.py simulation_file:=$sim_file
