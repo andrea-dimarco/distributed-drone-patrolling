@@ -2,12 +2,13 @@ import time
 import random
 
 from threading import Thread
-
+import numpy as np
+from sklearn.cluster import KMeans
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.action import ActionClient
-
+from geometry_msgs.msg import Point
 from rosgraph_msgs.msg import Clock
 from iot_project_interfaces.srv import TaskAssignment
 from iot_project_solution_interfaces.action import PatrollingAction
@@ -72,8 +73,9 @@ class TaskAssigner(Node):
 
         self.task = task
         self.no_drones = task.no_drones
-        for i in range(no_drones):
-        	self.drone_poss[i] = Point(x=0.0, y=0.0, z=0.0)
+        for i in range(self.no_drones):
+            self.drone_poss[i] = Point(x=0.0, y=0.0, z=0.0)
+
         self.targets = task.target_positions
         self.thresholds = task.target_thresholds
 
