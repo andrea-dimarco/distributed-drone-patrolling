@@ -12,7 +12,7 @@ from geometry_msgs.msg import Point
 from rosgraph_msgs.msg import Clock
 from iot_project_interfaces.srv import TaskAssignment
 from iot_project_solution_interfaces.action import PatrollingAction
-
+from iot_project_interfaces.msg import TargetsTimeLeft
 class TaskAssigner(Node):
 
     def __init__(self):
@@ -24,7 +24,7 @@ class TaskAssigner(Node):
         self.drone_poss = []
         self.targets = []
         self.thresholds = []
-
+        self.thresholds_dict = {}
         self.action_servers = []
         self.current_tasks =  []
         self.idle = []
@@ -40,6 +40,13 @@ class TaskAssigner(Node):
 
         self.sim_time_topic = self.create_subscription(
             Clock,
+            '/world/iot_project_world/clock',
+            self.store_sim_time_callback,
+            10
+        )
+
+        self.targets_time_left_topic = self.create_subscription(
+            TargetsTimeLeft,
             '/world/iot_project_world/clock',
             self.store_sim_time_callback,
             10
@@ -78,7 +85,8 @@ class TaskAssigner(Node):
 
         self.targets = task.target_positions
         self.thresholds = task.target_thresholds
-
+        self.thresholds_dict = {k:v for (k,v) in zip(self.targets, self.thresholds)}
+        
         self.current_tasks = [None]*self.no_drones
         self.idle = [True] * self.no_drones
         self.last_visits = task.last_visits
@@ -87,7 +95,6 @@ class TaskAssigner(Node):
         self.violation_w = task.violation_weight
         self.fairness_w = task.fairness_weight
         self.aoi_w = task.aoi_weight
-
         #here we compute the clusters for each drone
         print("[MESSAGE] Calculating cluster")
         tmp_array=np.array([(a.x,a.y,a.z) for a in task.target_positions])
@@ -159,16 +166,16 @@ class TaskAssigner(Node):
 
             drone_pos = Point(x=0.0,y=0.0,z=0.0)
 
-            point_aoi = 0.0
-            aoi_threshold = 0.0
+            point_aoi = 0.0 # sim time - last visit time
             print(self.task.last_visits)
             # Compute target with maximum priority
             target_i = None 
-            for i in range(len(targets_to_patrol)):
-                dist = calculate_target_priority(drone_pos, targets_to_patrol[i], point_aoi, aoi_threshold, self.aoi_w, self.violation_w)
+            for point in targets_to_patrol:
+                aoi_threshold = self.thresholds_dict[point]
+                dist = calculate_target_priority(drone_pos, point, point_aoi, aoi_threshold, self.aoi_w, self.violation_w)
                 if dist < min_dist:
                     min_dist = dist
-                    target_i = i
+                    target_i = point
 
             # We only want to get the closest target and work in a greedy manner
             #targets_to_patrol = [targets_to_patrol[target_i]]
@@ -209,6 +216,10 @@ class TaskAssigner(Node):
     # Callback used to store simulation time
     def store_sim_time_callback(self, msg):
         self.clock = msg.clock.sec * 10**9 + msg.clock.nanosec
+
+    def sto(self, msg):
+        self.clock = msg.clock.sec * 10**9 + msg.clock.nanosec
+
 
 def calculate_target_priority(point1, point2, aoi2, aoi_threshold2, aoi_weight, violation_weight, alpha=1.0, beta=1.0) -> float:
     """
