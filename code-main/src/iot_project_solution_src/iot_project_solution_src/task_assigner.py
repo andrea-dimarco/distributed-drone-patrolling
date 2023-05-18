@@ -1,13 +1,13 @@
 import time
 import random
-
+from sklearn.cluster import KMeans
 from threading import Thread
-
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.action import ActionClient
-
+from geometry_msgs.msg import Point
 from rosgraph_msgs.msg import Clock
 from iot_project_interfaces.srv import TaskAssignment
 from iot_project_solution_interfaces.action import PatrollingAction
@@ -22,7 +22,10 @@ class TaskAssigner(Node):
         self.no_drones = 0
         self.targets = []
         self.thresholds = []
-
+        self.violation_w = 0
+        self.fairness_w = 0
+        self.aoi_w = 0
+        self.target_clusters = []
         self.action_servers = []
         self.current_tasks =  []
         self.idle = []
@@ -72,9 +75,34 @@ class TaskAssigner(Node):
         self.no_drones = task.no_drones
         self.targets = task.target_positions
         self.thresholds = task.target_thresholds
-
         self.current_tasks = [None]*self.no_drones
         self.idle = [True] * self.no_drones
+
+        # get all weights for final score
+        self.violation_w = task.violation_weight
+        self.fairness_w = task.fairness_weight
+        self.aoi_w = task.aoi_weight
+
+        #maybe have a variable that decides which solution to use based on number of targets and drones
+        #self.difficulty = 0
+
+        #here we compute the clusters for each drone
+        #simple array splitting to test the methodology
+        #self.target_clusters = np.array_split(np.array(task.target_positions),task.no_drones)
+
+        print('CREATING TMP ARRAY OF SAMPLES')
+        tmp_array=np.array([(a.x,a.y,a.z) for a in task.target_positions])
+
+        print('CLUSTERING SAMPLES\n')
+        kmeans= KMeans(n_clusters=task.no_drones,random_state=0, n_init='auto').fit(tmp_array)
+        
+        #print("SORTING CLUSTERS\n")
+        #need to assign drone based on distance to cluster and sort each cluster to get optimal order of visit
+        
+        tmp_cluster = [tmp_array[kmeans.labels_ == a] for a in range(self.no_drones)]
+
+        # converting to Point matrix
+        self.target_clusters = [[Point(x=el[0],y=el[1],z=el[2]) for el in cluster] for cluster in tmp_cluster]
 
         # Now create a client for the action server of each drone
         for d in range(self.no_drones):
@@ -85,7 +113,7 @@ class TaskAssigner(Node):
                     'X3_%d/patrol_targets' % d,
                 )
             )
-
+        
 
     # This method starts on a separate thread an ever-going patrolling task, it does that
     # by checking the idle state value of every drone and submitting a new goal as soon as
@@ -126,9 +154,12 @@ class TaskAssigner(Node):
 
         self.idle[drone_id] = False
 
+        #assign target to drone
         if not targets_to_patrol:
-            targets_to_patrol = self.targets.copy()
-            random.shuffle(targets_to_patrol)
+            #targets_to_patrol = self.targets.copy()
+            #random.shuffle(targets_to_patrol)
+            targets_to_patrol = self.target_clusters[drone_id]
+            print(targets_to_patrol)
 
         patrol_task =  PatrollingAction.Goal()
         patrol_task.targets = targets_to_patrol
