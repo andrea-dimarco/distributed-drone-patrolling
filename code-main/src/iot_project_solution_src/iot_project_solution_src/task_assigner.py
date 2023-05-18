@@ -1,13 +1,13 @@
 import time
 import random
-
+from sklearn.cluster import KMeans
 from threading import Thread
-
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.action import ActionClient
-
+from geometry_msgs.msg import Point
 from rosgraph_msgs.msg import Clock
 from iot_project_interfaces.srv import TaskAssignment
 from iot_project_solution_interfaces.action import PatrollingAction
@@ -17,13 +17,15 @@ class TaskAssigner(Node):
     def __init__(self):
 
         super().__init__('task_assigner')
-        self.last_visits = []
+            
         self.task = None
         self.no_drones = 0
-        self.drone_poss = []
         self.targets = []
         self.thresholds = []
-
+        self.violation_w = 0
+        self.fairness_w = 0
+        self.aoi_w = 0
+        self.target_clusters = []
         self.action_servers = []
         self.current_tasks =  []
         self.idle = []
@@ -71,15 +73,36 @@ class TaskAssigner(Node):
 
         self.task = task
         self.no_drones = task.no_drones
-        for i in range(no_drones):
-        	self.drone_poss[i] = Point(x=0.0, y=0.0, z=0.0)
         self.targets = task.target_positions
         self.thresholds = task.target_thresholds
-
         self.current_tasks = [None]*self.no_drones
         self.idle = [True] * self.no_drones
+
+        # get all weights for final score
+        self.violation_w = task.violation_weight
+        self.fairness_w = task.fairness_weight
+        self.aoi_w = task.aoi_weight
+
+        #maybe have a variable that decides which solution to use based on number of targets and drones
+        #self.difficulty = 0
+
+        #here we compute the clusters for each drone
+        #simple array splitting to test the methodology
+        #self.target_clusters = np.array_split(np.array(task.target_positions),task.no_drones)
+
+        print('CREATING TMP ARRAY OF SAMPLES')
+        tmp_array=np.array([(a.x,a.y,a.z) for a in task.target_positions])
+
+        print('CLUSTERING SAMPLES\n')
+        kmeans= KMeans(n_clusters=task.no_drones,random_state=0, n_init='auto').fit(tmp_array)
         
-        self.last_visits = task.last_visits
+        #print("SORTING CLUSTERS\n")
+        #need to assign drone based on distance to cluster and sort each cluster to get optimal order of visit
+        
+        tmp_cluster = [tmp_array[kmeans.labels_ == a] for a in range(self.no_drones)]
+
+        # converting to Point matrix
+        self.target_clusters = [[Point(x=el[0],y=el[1],z=el[2]) for el in cluster] for cluster in tmp_cluster]
 
         # Now create a client for the action server of each drone
         for d in range(self.no_drones):
@@ -90,7 +113,7 @@ class TaskAssigner(Node):
                     'X3_%d/patrol_targets' % d,
                 )
             )
-
+        
 
     # This method starts on a separate thread an ever-going patrolling task, it does that
     # by checking the idle state value of every drone and submitting a new goal as soon as
@@ -122,7 +145,7 @@ class TaskAssigner(Node):
     #      visit of each target can be read from the array last_visits in the service message.
     #      The simulation time is already stored in self.sim_time for you to use in case
     #      Times are all in nanoseconds.
-    def submit_task(self, drone_id, targets_to_patrol=None):
+    def submit_task(self, drone_id, targets_to_patrol = None):
 
         self.get_logger().info("Submitting task for drone X3_%s" % drone_id)
     
@@ -130,29 +153,15 @@ class TaskAssigner(Node):
             return
 
         self.idle[drone_id] = False
-        self.last_visits = task.last_visits
 
+        #assign target to drone
         if not targets_to_patrol:
- 			my_targets = self.targets.copy()
- 			target_i = None
- 			min_dist = float("inf")
- 			drone_pos = drone_poss[drone_id]
- 			
- 			point_aoi = 0.0
- 			aoi_threshold = 0.0
- 			aoi_weight = 0.0
- 			violation_weight = 0.0
- 			
- 			
- 			for i in range(len(my_targets)):
- 				dist = distance(drone_pos, my_targets[i], point_aoi, aoi_threshold, aoi_weight, violation_weight)
- 				if dist < min_dist:
- 					min_dist = dist
- 					target_i = i
- 			
-            targets_to_patrol = my_targets[target_i]
+            #targets_to_patrol = self.targets.copy()
+            #random.shuffle(targets_to_patrol)
+            targets_to_patrol = self.target_clusters[drone_id]
+            print(targets_to_patrol)
 
-        patrol_task = PatrollingAction.Goal()
+        patrol_task =  PatrollingAction.Goal()
         patrol_task.targets = targets_to_patrol
 
         patrol_future = self.action_servers[drone_id].send_goal_async(patrol_task)
@@ -189,35 +198,7 @@ class TaskAssigner(Node):
     def store_sim_time_callback(self, msg):
         self.clock = msg.clock.sec * 10**9 + msg.clock.nanosec
 
-def distance(point1, point2, aoi2, aoi_threshold2, aoi_weight, violation_weight, alpha=1.0, beta=1.0) -> float:
-    """
-    Computes the inverse priority of reaching point2 from point1, depending on the current scenario of the simulation.
-    
-    Takes:
-    	point1, point2: ROS points
-    	aoi_threshold2: the threshold of the AoI for point2
-    	aoi2:           the CURRENT AoI of point2
-    	aoi_weight:     the weight of the AoI in the final score
-    	violation_weight: the weight of the violation in the final score
-    	alpha, beta: scaling parametrs
-    """
-    p1 = np.array([point1.x, point1.y, point1.z])
-    p2 = np.array([point2.x, point2.y, point2.z])
-    
-    euclidean = np.linalg.norm(p1, p2)
-    
-    if violation_weight > aoi_weight:
-        if (aoi_threshold2 - aoi2) < 0: # constraint violated
-            aoi_bonus = (aoi2/aoi_threshold2) * abs(aoi_threshold2 - aoi2)
-        elif (aoi_threshold2 - aoi2) == 0:
-            aoi_bonus = 1.0
-        else: # legal
-            aoi_bonus = (aoi2/aoi_threshold2) * (1 / (aoi_threshold2 - aoi2))
-    else:
-        aoi_bonus = aoi2
-        
-    dist = (aoi_bonus*beta) / (euclidean*alpha)
-    return dist
+
         
 def main():
 
