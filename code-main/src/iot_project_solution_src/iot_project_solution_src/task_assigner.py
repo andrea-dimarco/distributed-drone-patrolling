@@ -47,8 +47,8 @@ class TaskAssigner(Node):
 
         self.targets_time_left_topic = self.create_subscription(
             TargetsTimeLeft,
-            '/world/iot_project_world/clock',
-            self.store_sim_time_callback,
+            '/task_assigner/targets_time_left',
+            self.store_targets_time_left_callback,
             10
         )
 
@@ -118,7 +118,7 @@ class TaskAssigner(Node):
                 )
             )
 
-
+    
     # This method starts on a separate thread an ever-going patrolling task, it does that
     # by checking the idle state value of every drone and submitting a new goal as soon as
     # that value goes back to True
@@ -217,7 +217,7 @@ class TaskAssigner(Node):
     def store_sim_time_callback(self, msg):
         self.clock = msg.clock.sec * 10**9 + msg.clock.nanosec
 
-    def sto(self, msg):
+    def store_targets_time_left_callback(self, msg):
         self.clock = msg.clock.sec * 10**9 + msg.clock.nanosec
 
 
