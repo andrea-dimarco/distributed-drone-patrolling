@@ -18,10 +18,9 @@ class TaskAssigner(Node):
     def __init__(self):
 
         super().__init__('task_assigner')
-        self.last_visits = []
         self.task = None
         self.no_drones = 0
-        self.drone_poss = []
+        self.drone_pos = [] # we save the position of the drone after each task (the last point visited)
         self.targets = []
         self.thresholds = []
         self.thresholds_dict = {}
@@ -29,6 +28,7 @@ class TaskAssigner(Node):
         self.current_tasks =  []
         self.idle = []
         self.last_visits = []
+        self.targets_time_left = []
 
         self.sim_time = 0
 
@@ -81,12 +81,14 @@ class TaskAssigner(Node):
         self.task = task
         self.no_drones = task.no_drones
         for i in range(self.no_drones):
-            self.drone_poss[i] = Point(x=0.0, y=0.0, z=0.0)
+            self.drone_pos.append(Point(x=0.0, y=0.0, z=0.0))
 
         self.targets = task.target_positions
         self.thresholds = task.target_thresholds
-        self.thresholds_dict = {k:v for (k,v) in zip(self.targets, self.thresholds)}
-        
+        #can't directly use Point object
+        self.thresholds_dict = {tuple((k.x,k.y,k.z)):v for k,v in zip(self.targets, self.thresholds)}
+
+        print("[MESSAGE] Printing Threshold Dict",self.thresholds_dict)
         self.current_tasks = [None]*self.no_drones
         self.idle = [True] * self.no_drones
         self.last_visits = task.last_visits
@@ -158,31 +160,35 @@ class TaskAssigner(Node):
 
         self.idle[drone_id] = False
         print("[MESSAGE] ASSIGNINING TARGETS")
+        target_i = None 
 
         if not targets_to_patrol:
             # NEED TO CALL TASK ASSIGNER AND GET TASK UPDATE
-            targets_to_patrol = self.target_clusters[drone_id]
+            drone_cluster = self.target_clusters[drone_id]
             min_dist = float("inf")
 
-            drone_pos = Point(x=0.0,y=0.0,z=0.0)
+            drone_pos = self.drone_pos[drone_id]
+            
+            # TODO Calculate target_aoi
+            # sim time - last visit time OR target_threshold - target_time_left when positive else reciprocal of ttl
+            point_aoi = 42 # just an example
 
-            point_aoi = 0.0 # sim time - last visit time
-            print(self.task.last_visits)
             # Compute target with maximum priority
-            target_i = None 
-            for point in targets_to_patrol:
-                aoi_threshold = self.thresholds_dict[point]
+            for point in drone_cluster:
+                aoi_threshold = self.thresholds_dict[tuple((point.x,point.y,point.z))]
+                # TODO test with threshold equal to aoi
                 dist = calculate_target_priority(drone_pos, point, point_aoi, aoi_threshold, self.aoi_w, self.violation_w)
                 if dist < min_dist:
                     min_dist = dist
                     target_i = point
-
+            targets_to_patrol = [target_i]
+            self.drone_pos[drone_id] = target_i # we update the position of the last visited node 
             # We only want to get the closest target and work in a greedy manner
             #targets_to_patrol = [targets_to_patrol[target_i]]
 
         patrol_task = PatrollingAction.Goal()
+        #patrol_task.targets = targets_to_patrol
         patrol_task.targets = targets_to_patrol
-
         patrol_future = self.action_servers[drone_id].send_goal_async(patrol_task)
 
         # This is a new construct for you. Basically, callbacks have no way of receiving arguments except
@@ -218,10 +224,10 @@ class TaskAssigner(Node):
         self.clock = msg.clock.sec * 10**9 + msg.clock.nanosec
 
     def store_targets_time_left_callback(self, msg):
-        self.clock = msg.clock.sec * 10**9 + msg.clock.nanosec
+        self.targets_time_left = msg.times
 
 
-def calculate_target_priority(point1, point2, aoi2, aoi_threshold2, aoi_weight, violation_weight, alpha=1.0, beta=1.0) -> float:
+def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_threshold2 : float, aoi_weight : float, violation_weight : float, alpha=1.0, beta=1.0) -> float:
     """
     Computes the inverse priority of reaching point2 from point1, depending on the current scenario of the simulation.
     
@@ -233,11 +239,11 @@ def calculate_target_priority(point1, point2, aoi2, aoi_threshold2, aoi_weight, 
     	violation_weight: the weight of the violation in the final score
     	alpha, beta: scaling parametrs
     """
-    p1 = np.array([point1.x, point1.y, point1.z])
-    p2 = np.array([point2.x, point2.y, point2.z])
+    p1 = np.array((point1.x, point1.y, point1.z))
+    p2 = np.array((point2.x, point2.y, point2.z))
     
-    euclidean = np.linalg.norm(p1, p2)
-    
+    euclidean = np.linalg.norm(p1 - p2)
+    print("[MESSAGE] Euclidean norm: %s" % euclidean)
     if violation_weight > aoi_weight:
         if (aoi_threshold2 - aoi2) < 0: # constraint violated
             aoi_bonus = (aoi2/aoi_threshold2) * abs(aoi_threshold2 - aoi2)
@@ -249,6 +255,7 @@ def calculate_target_priority(point1, point2, aoi2, aoi_threshold2, aoi_weight, 
         aoi_bonus = aoi2
     
     result = -(aoi_bonus*beta) / (euclidean*alpha)
+    print("[MESSAGE] Inverse priority:", result)
     return result
         
 def main():
