@@ -24,6 +24,7 @@ class TaskAssigner(Node):
         self.targets = []
         self.thresholds = []
         self.thresholds_dict = {}
+        self.cluster_map = []
         self.action_servers = []
         self.current_tasks =  []
         self.idle = []
@@ -110,6 +111,10 @@ class TaskAssigner(Node):
         # converting to Point matrix
         self.target_clusters = [[Point(x=el[0],y=el[1],z=el[2]) for el in cluster] for cluster in tmp_cluster]
 
+        self.cluster_map = [[self.targets.index(p) for p in cluster] for cluster in self.target_clusters]
+        
+        print("[MESSAGE] Printing Cluster Map",self.cluster_map)
+        
         # Now create a client for the action server of each drone
         for d in range(self.no_drones):
             self.action_servers.append(
@@ -169,18 +174,21 @@ class TaskAssigner(Node):
 
             drone_pos = self.drone_pos[drone_id]
             
-            # TODO Calculate target_aoi
-            # sim time - last visit time OR target_threshold - target_time_left when positive else reciprocal of ttl
-            point_aoi = 42 # just an example
-
             # Compute target with maximum priority
-            for point in drone_cluster:
-                aoi_threshold = self.thresholds_dict[tuple((point.x,point.y,point.z))]
+            for i in range(len(drone_cluster)):
+                point = drone_cluster[i]
+                global_point_index = self.cluster_map[drone_id][i]
+                target_time_left = round(float(self.targets_time_left[global_point_index] / 10**9),2)
+                point_aoi = self.thresholds[global_point_index] - target_time_left
+                print("THRESHOLD", self.thresholds)
+                print("TARGET TIME LEFT ",self.targets_time_left)
+                aoi_threshold = self.thresholds[global_point_index]
                 # TODO test with threshold equal to aoi
                 dist = calculate_target_priority(drone_pos, point, point_aoi, aoi_threshold, self.aoi_w, self.violation_w)
                 if dist < min_dist:
                     min_dist = dist
                     target_i = point
+            
             targets_to_patrol = [target_i]
             self.drone_pos[drone_id] = target_i # we update the position of the last visited node 
             # We only want to get the closest target and work in a greedy manner
@@ -223,6 +231,7 @@ class TaskAssigner(Node):
     def store_sim_time_callback(self, msg):
         self.clock = msg.clock.sec * 10**9 + msg.clock.nanosec
 
+    # Callback used to store time left for every target
     def store_targets_time_left_callback(self, msg):
         self.targets_time_left = msg.times
 
