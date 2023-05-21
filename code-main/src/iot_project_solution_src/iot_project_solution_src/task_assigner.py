@@ -13,6 +13,9 @@ from rosgraph_msgs.msg import Clock
 from iot_project_interfaces.srv import TaskAssignment
 from iot_project_solution_interfaces.action import PatrollingAction
 from iot_project_interfaces.msg import TargetsTimeLeft
+
+from ant_colony import *
+
 class TaskAssigner(Node):
 
     def __init__(self):
@@ -98,15 +101,17 @@ class TaskAssigner(Node):
         self.violation_w = task.violation_weight
         self.fairness_w = task.fairness_weight
         self.aoi_w = task.aoi_weight
-        #here we compute the clusters for each drone
-        print("[MESSAGE] Calculating cluster")
-        tmp_array=np.array([(a.x,a.y,a.z) for a in task.target_positions])
 
-        kmeans= KMeans(n_clusters=task.no_drones,random_state=0, n_init='auto').fit(tmp_array)
+        ### dictionary with paths to assign to drones
+        self.patrol_routes = { drone_id : [] for drone_id in range(self.no_drones)}
+
+        # here we compute the clusters for each drone
+        tmp_array = np.array([(a.x,a.y,a.z) for a in task.target_positions])
+        clustering_method = KMeans(n_clusters=task.no_drones,random_state=0, n_init='auto').fit(tmp_array)
         
         #need to assign drone based on distance to cluster and sort each cluster to get optimal order of visit
         
-        tmp_cluster = [tmp_array[kmeans.labels_ == a] for a in range(self.no_drones)]
+        tmp_cluster = [tmp_array[clustering_method.labels_ == a] for a in range(self.no_drones)]
 
         # converting to Point matrix
         self.target_clusters = [[Point(x=el[0],y=el[1],z=el[2]) for el in cluster] for cluster in tmp_cluster]
@@ -167,32 +172,41 @@ class TaskAssigner(Node):
         print("[MESSAGE] ASSIGNINING TARGETS")
         target_i = None 
 
-        if not targets_to_patrol:
+        # start computing patrol routes in advance
+        # because the computation might take time
+        if len(targets_to_patrol) < 3:
             # NEED TO CALL TASK ASSIGNER AND GET TASK UPDATE
             drone_cluster = self.target_clusters[drone_id]
-            min_dist = float("inf")
-
             drone_pos = self.drone_pos[drone_id]
-            
+            aois = []
+            thresholds = []
+
             # Compute target with maximum priority
             for i in range(len(drone_cluster)):
-                point = drone_cluster[i]
+                # get the global index of the point
                 global_point_index = self.cluster_map[drone_id][i]
                 target_time_left = round(float(self.targets_time_left[global_point_index] / 10**9),2)
+                # compute the AoI of the point
                 point_aoi = self.thresholds[global_point_index] - target_time_left
-                print("THRESHOLD", self.thresholds)
-                print("TARGET TIME LEFT ",self.targets_time_left)
+                # get the threshold for the point
                 aoi_threshold = self.thresholds[global_point_index]
-                # TODO test with threshold equal to aoi
-                dist = calculate_target_priority(drone_pos, point, point_aoi, aoi_threshold, self.aoi_w, self.violation_w)
-                if dist < min_dist:
-                    min_dist = dist
-                    target_i = point
+                # append points to the list in order 
+                # this way they have corresponding indexes to the array of points drone_cluster
+                aois.append(point_aoi)
+                thresholds.append(aoi_threshold)
             
-            targets_to_patrol = [target_i]
-            self.drone_pos[drone_id] = target_i # we update the position of the last visited node 
-            # We only want to get the closest target and work in a greedy manner
-            #targets_to_patrol = [targets_to_patrol[target_i]]
+            # compute a near-optimal path for the drone
+            # we do this in advance to save time
+            path = ant_colony(drone_cluster, aois, thresholds, self.aoi_w, self.violation_w, drone_pos)
+            # save the path for later
+            self.patrol_routes[drone_id] = path
+            # update the drone's position
+            self.drone_pos[drone_id] = targets_to_patrol[-1]
+
+        if not targets_to_patrol:
+            # assign the previously saved path to the drone
+            # because now the drone is free
+            targets_to_patrol = self.patrol_routes[drone_id]
 
         patrol_task = PatrollingAction.Goal()
         #patrol_task.targets = targets_to_patrol
