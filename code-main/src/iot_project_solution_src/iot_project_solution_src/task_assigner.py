@@ -120,35 +120,6 @@ class TaskAssigner(Node):
         
         print("[MESSAGE] Printing Cluster Map",self.cluster_map)
 
-        # Compute near optimal path using state of the art ant colony algorithm
-        for drone_id in range(self.no_drones):
-            drone_cluster = self.target_clusters[drone_id]
-            drone_pos = self.drone_pos[drone_id]
-            aois = []
-            thresholds = []
-
-            # Compute target with maximum priority
-            for i in range(len(drone_cluster)):
-                # get the global index of the point
-                global_point_index = self.cluster_map[drone_id][i]
-                target_time_left = round(float(self.targets_time_left[global_point_index] / 10**9),2)
-                # compute the AoI of the point
-                point_aoi = self.thresholds[global_point_index] - target_time_left
-                # get the threshold for the point
-                aoi_threshold = self.thresholds[global_point_index]
-                # append points to the list in order 
-                # this way they have corresponding indexes to the array of points drone_cluster
-                aois.append(point_aoi)
-                thresholds.append(aoi_threshold)
-            
-            # compute a near-optimal path for the drone
-            # we do this in advance to save time
-            path = optimise_ant_colony(drone_cluster, aois, thresholds, self.aoi_w, self.violation_w, drone_pos)
-            # save the path for later
-            self.patrol_routes[drone_id] = path
-
-        print("[MESSAGE] paths", self.patrol_routes)
-
         # Now create a client for the action server of each drone
         for d in range(self.no_drones):
             self.action_servers.append(
@@ -203,13 +174,51 @@ class TaskAssigner(Node):
         # start computing patrol routes in advance
         # because the computation might take time
         if not targets_to_patrol:
-            # NEED TO CALL TASK ASSIGNER AND GET TASK UPDATE
 
+
+            # NEED TO CALL TASK ASSIGNER AND GET TASK UPDATE
+            drone_cluster = self.target_clusters[drone_id]
+            drone_pos = self.drone_pos[drone_id]
+            min_dist = float("inf")
+            for i in range(len(drone_cluster)):
+                # get the global index of the point
+                global_point_index = self.cluster_map[drone_id][i]
+                target_time_left = round(float(self.targets_time_left[global_point_index] / 10**9),2)
+                # compute the AoI of the point
+                point_aoi = self.thresholds[global_point_index] - target_time_left
+                # get the threshold for the point
+                aoi_threshold = self.thresholds[global_point_index]
+                dist = calculate_target_priority(drone_pos, self.targets[global_point_index], point_aoi, aoi_threshold, self.aoi_w, self.violation_w, alpha=0.1, beta=1.0)
+                if dist < min_dist:
+                    min_dist = dist
+                    target_i = global_point_index
+            targets_to_patrol = [self.targets[target_i]]
+
+                
+            """ # Compute target with maximum priority
+            for i in range(len(drone_cluster)):
+                # get the global index of the point
+                global_point_index = self.cluster_map[drone_id][i]
+                target_time_left = round(float(self.targets_time_left[global_point_index] / 10**9),2)
+                # compute the AoI of the point
+                point_aoi = self.thresholds[global_point_index] - target_time_left
+                # get the threshold for the point
+                aoi_threshold = self.thresholds[global_point_index]
+                # append points to the list in order 
+                # this way they have corresponding indexes to the array of points drone_cluster
+                aois.append(point_aoi)
+                thresholds.append(aoi_threshold)
+            
+            # compute a near-optimal path for the drone
+            # we do this in advance to save time
+            path = optimise_ant_colony(drone_cluster, aois, thresholds, self.aoi_w, self.violation_w, drone_pos)
+            # save the path for later
+            self.patrol_routes[drone_id] = path
             # assign the previously saved path to the drone
             # because now the drone is free
             targets_to_patrol = self.patrol_routes[drone_id]
             # update the drone's position
-            self.drone_pos[drone_id] = targets_to_patrol[-1]
+            self.drone_pos[drone_id] = targets_to_patrol[-1] """
 
         patrol_task = PatrollingAction.Goal()
         #patrol_task.targets = targets_to_patrol
@@ -270,7 +279,8 @@ def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_
     
     euclidean = np.linalg.norm(p1 - p2)
     print("[MESSAGE] Euclidean norm: %s" % euclidean)
-    if violation_weight > aoi_weight:
+    # if violation_weight > aoi_weight:
+    if True:
         if (aoi_threshold2 - aoi2) < 0: # constraint violated
             aoi_bonus = (aoi2/aoi_threshold2) * abs(aoi_threshold2 - aoi2)
         elif (aoi_threshold2 - aoi2) == 0: # we don't want to deal with 0

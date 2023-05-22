@@ -36,7 +36,7 @@ def from_tuple_to_point(p):
 def tuple_dist(point1, point2,
                 aoi2, aoi_threshold2,
                 aoi_weight, violation_weight,
-                alpha=1.0, beta=1.0, dist_fn=None) -> float:
+                alpha=1.0, beta=0.2, dist_fn=None) -> float:
     """
     Computes the inverse priority of reaching point2 from point1, depending on the current scenario of the simulation.
     
