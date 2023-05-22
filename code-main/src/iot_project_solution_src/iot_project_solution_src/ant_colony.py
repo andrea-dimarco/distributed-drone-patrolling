@@ -31,7 +31,7 @@ class Point:
 def from_point_to_tuple(p : Point):
     return (p.x,p.y,p.z)
 def from_tuple_to_point(p):
-    return Point(p[0],p[1],p[2])
+    return Point(x=p[0],y=p[1],z=p[2])
 
 def tuple_dist(point1, point2,
                 aoi2, aoi_threshold2,
@@ -499,7 +499,7 @@ def postprocess_path(Path : List[Any], path_len):
         new_path.append(from_tuple_to_point(point))
     return new_path[:path_len]
 
-def ant_colony(Env : List[Any], aois : List[Any], thresholds : List[Any],
+def optimise_ant_colony(Env : List[Any], aois : List[Any], thresholds : List[Any],
                aoi_weight : float, violation_weight : float, drone_pos : Point,
                distance_fn=tuple_dist,
                complete_path=True,
