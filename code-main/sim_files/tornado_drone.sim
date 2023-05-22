@@ -1,0 +1,25 @@
+# simulation name can be defined like this
+simulation_name:Tornado Drone
+
+# specifies the number of drones in the simulation
+no_drones:2
+
+# specifies simulation time in seconds
+simulation_time:120
+
+# specifies targets positions
+target_positions:(20,0,10);(22,2,9);(24,4,7);(26,4,5);(28,3,3);(30,2,2);(4,0,1);(6,-2,1);(8,-4,2);(10,-5,3);(12,-6,5);(14,-6,7);(16,-4,9);(18,-2,10)
+
+# specifies threshold values for every target
+threshold_values:30,30,30,30,30,30,30,30,30,30,30,30,30,30
+# specifies aoi weight
+aoi_weight:1.0
+
+# specifies violation weight
+violation_weight:1.0
+
+# specifies the fairness' weight
+fairness_weight:0.0
+
+# specifies wind direction and strength
+wind_vector:(6,0,0)
