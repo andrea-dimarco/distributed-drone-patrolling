@@ -75,7 +75,7 @@ class DroneController(Node):
             count += 1
 
             # rotate to target
-            self.rotate_to_target(target)
+            #self.rotate_to_target(target)
             # move to target
             self.move_to_target(target)
             # send feedback for the target reached
@@ -160,28 +160,26 @@ class DroneController(Node):
         stop_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
         self.cmd_vel_topic.publish(stop_msg)
 
-
     def move_to_target(self, target : Point, eps = 0.5, angle_eps = 0.05):
 
         current_position = (self.position.x, self.position.y, self.position.z)
         objective_point = (target.x, target.y, target.z)
-
         while point_distance(current_position, objective_point) > eps:
 
             current_position = (self.position.x, self.position.y, self.position.z)
-            direction_vector = move_vector(current_position, objective_point)
-
+            direction_vector = unit_vector_between_points(current_position, objective_point)
             mov = Twist()
-            mov.linear = Vector3(x=direction_vector[0], y=0.0, z=direction_vector[1])
+            mov.linear = Vector3(x=direction_vector[0], y=direction_vector[1], z=direction_vector[2])
+
             mov.angular = Vector3(x=0.0, y=0.0, z=0.0)
 
-            angle = angle_between_points(current_position, objective_point)
-            current_angle = self.yaw
+            #angle = angle_between_points(current_position, objective_point)
+            #current_angle = self.yaw
 
-            if not (angle-angle_eps < current_angle < angle+angle_eps):
-                angle_diff = (current_angle-angle)
-                mov.angular = Vector3(x=0.0, y=0.0, z=math.sin(angle_diff))
-
+            #if not (angle-angle_eps < current_angle < angle+angle_eps):
+            #    print("[MESSAGE] Correcting angle")
+            #    angle_diff = (current_angle-angle)
+            #    mov.angular = Vector3(x=0.0, y=0.0, z=math.sin(angle_diff))
             self.cmd_vel_topic.publish(mov)
 
         stop_msg = Twist()
