@@ -168,6 +168,9 @@ class DroneController(Node):
 
             current_position = (self.position.x, self.position.y, self.position.z)
             direction_vector = unit_vector_between_points(current_position, objective_point)
+            # wind = get_wind_vector()
+            # dir = unit_vector_between_points(current_position, objective_point)
+            # direction_vector = Vector3(x=dir.x-wind.x, y=dir.y-wind.y, z=dir.z-wind.z)
             mov = Twist()
             mov.linear = Vector3(x=direction_vector[0], y=direction_vector[1], z=direction_vector[2])
 
