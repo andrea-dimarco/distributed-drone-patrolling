@@ -14,9 +14,9 @@ from geometry_msgs.msg import Point
 """
 class Point:
     def __init__(self, x=-1, y=-1, z=-1):
-        self.x = x if x > 0 else random.uniform(0,9)
-        self.y = y if y > 0 else random.uniform(0,9)
-        self.z = z if z > 0 else random.uniform(0,9)
+        self.x = x if x > 0 else random.uniform(0,50)
+        self.y = y if y > 0 else random.uniform(0,50)
+        self.z = z if z > 0 else random.uniform(0,50)
     def __repr__(self):
         return str((round(self.x,2),round(self.y,2),round(self.z,2)))
     def __str__(self):
@@ -33,10 +33,10 @@ def from_point_to_tuple(p : Point):
 def from_tuple_to_point(p):
     return Point(x=p[0],y=p[1],z=p[2])
 
-def tuple_dist(point1, point2,
+def ant_dist(point1, point2,
                 aoi2, aoi_threshold2,
                 aoi_weight, violation_weight,
-                alpha=1.0, beta=0.2, dist_fn=None) -> float:
+                alpha=1.0, beta=0.1, dist_fn=None) -> float:
     """
     Computes the inverse priority of reaching point2 from point1, depending on the current scenario of the simulation.
     
@@ -48,17 +48,6 @@ def tuple_dist(point1, point2,
     	violation_weight: the weight of the violation in the final score
     	alpha, beta:      scaling parametrs
     """
-    """
-    Computes the inverse priority of reaching point2 from point1, depending on the current scenario of the simulation.
-    
-    Takes:
-    	point1, point2: ROS points
-    	aoi_threshold2: the threshold of the AoI for point2
-    	aoi2:           the CURRENT AoI of point2
-    	aoi_weight:     the weight of the AoI in the final score
-    	violation_weight: the weight of the violation in the final score
-    	alpha, beta: scaling parametrs
-    """
     
     #p1 = np.array((point1[0], point1[1], point1[2]))
     #p2 = np.array((point2[0], point2[1], point2[2]))
@@ -67,28 +56,26 @@ def tuple_dist(point1, point2,
     euclidean = math.sqrt( ((point1[0]-point2[0])**2) + ((point1[1]-point2[1])**2) + ((point1[2]-point2[2])**2) )
     ### debug
     #print("[MESSAGE] Euclidean norm: %s" % euclidean)
-    if violation_weight > aoi_weight:
-        if (aoi_threshold2 - aoi2) < 0: # constraint violated
-            aoi_bonus = (aoi2/aoi_threshold2) * abs(aoi_threshold2 - aoi2)
-        elif (aoi_threshold2 - aoi2) == 0: # we don't want to deal with 0
-            aoi_bonus = 1.0
-        else: # legal
-            aoi_bonus = (aoi2/aoi_threshold2) * (1 / (aoi_threshold2 - aoi2))
-    else:
-        aoi_bonus = aoi2
+    if (aoi_threshold2 - aoi2) < 0: # constraint violated
+        aoi_bonus = (aoi2/aoi_threshold2) * abs(aoi_threshold2 - aoi2)
+    elif (aoi_threshold2 - aoi2) == 0: # we don't want to deal with 0
+        aoi_bonus = 1.0
+    else: # legal
+        aoi_bonus = (aoi2/aoi_threshold2) * (1 / (aoi_threshold2 - aoi2))
     
-    if euclidean == 0.0:
-        priority = 0.0
+    if euclidean == 0.0: # we are measuring the distance between the same point so it must be 0 regardless of the bonus
+        dist = 0.0
     else:
-        priority = -(aoi_bonus*beta)/(euclidean*alpha) if aoi_bonus > 0.0 else (euclidean*alpha)
+        print("euclidean: " + str(euclidean) + "| aoi_bonus: " + str(aoi_bonus))
+        dist = (euclidean*alpha) - (aoi_bonus*beta) if aoi_bonus > 0.0 else (euclidean*alpha)
     ### debug
     #print("[MESSAGE] Priority:", -priority)
-    return priority if (priority != 0.0) else 0.00001
+    return dist if (dist != 0.0) else 0.00001
 
 def path_lenght(path,
                   aois, thresholds,
                   aoi_weight, violation_weight,
-                  alpha=1.0, beta=1.0, f_dist=tuple_dist,
+                  alpha=1.0, beta=1.0, f_dist=ant_dist,
                   loop=False) -> float:
     
     total_len = 0.0
@@ -180,8 +167,8 @@ class AntColonySolver:
                  min_time=0,              # minimum runtime
                  timeout=0,               # maximum time in seconds to run for
                  stop_factor=1,           # how many times to redouble effort after new new best path
-                 min_round_trips=5,       # minimum number of round trips before stopping
-                 max_round_trips=10,     # maximum number of round trips before stopping                 
+                 min_round_trips=10,       # minimum number of round trips before stopping
+                 max_round_trips=20,     # maximum number of round trips before stopping                 
                  min_ants=0,              # Total number of ants to use
                  max_ants=0,              # Total number of ants to use
                  
@@ -432,8 +419,8 @@ class AntColonySolver:
         return next_node
             
         
-def AntColonyRunner(points, aois, thresholds, aoi_weight, violation_weight, dist_fn=tuple_dist, verbose=False, plot=False, label={}, algorithm=AntColonySolver, **kwargs):
-    solver     = algorithm(cost_fn=dist_fn, verbose=verbose, **kwargs)
+def AntColonyRunner(points, aois, thresholds, aoi_weight, violation_weight, dist_fn=ant_dist, verbose=False, plot=False, label={}, **kwargs):
+    solver     = AntColonySolver(cost_fn=dist_fn, verbose=verbose, **kwargs)
     start_time = time.perf_counter()
     result     = solver.solve(points, aois, thresholds, aoi_weight, violation_weight)
     stop_time  = time.perf_counter()
@@ -452,7 +439,7 @@ def preprocess_set(Points : List[Any],
                    aois : List[Any], thresholds : List[Any],
                    aoi_weight : float, violation_weight : float,
                    drone_pos : Point,
-                   dist_fn=tuple_dist):
+                   dist_fn=ant_dist):
 
     ### Convert points to tuples
     new_problem = []
@@ -499,11 +486,12 @@ def postprocess_path(Path : List[Any], path_len):
         new_path.append(from_tuple_to_point(point))
     return new_path[:path_len]
 
-def optimise_ant_colony(Env : List[Any], aois : List[Any], thresholds : List[Any],
+def find_patrol_route(Env : List[Any], aois : List[Any], thresholds : List[Any],
                aoi_weight : float, violation_weight : float, drone_pos : Point,
-               distance_fn=tuple_dist,
+               distance_fn=ant_dist,
                complete_path=True,
-               path_len=100):
+               path_len=100,
+               loop=False):
     """
     This function initializes the problem and feeds it to an ant colony that will try to find the best path.
     If complete_path=False the function will return ONLY the first path_len steps (i.e. a partial path).
@@ -521,7 +509,9 @@ def optimise_ant_colony(Env : List[Any], aois : List[Any], thresholds : List[Any
                            the points must be either 3D arrays or tuples, not ROS Point types.
                            The goal will be to MINIMIZE this function.
         complete_path    : boolean flag to signal the algorithm if we want only a partial path or not
-        path_len         : if we want oonly a partial path, this will be the length of said path.
+        path_len         : if we want only a partial path, this will be the length of said path.
+        loop             : if this is true then the function will extend the path to include a "reverse"
+                           path back to the origin following the same steps backwards.
     """
     ### variables
     n_points = len(Env)
@@ -535,4 +525,29 @@ def optimise_ant_colony(Env : List[Any], aois : List[Any], thresholds : List[Any
     ### post-processing
     path = postprocess_path(result, n_points) if complete_path else postprocess_path(result, min(n_points,path_len))
 
+    if loop:
+        i = len(path)-2
+        while (i >= 0):
+            path.append(path[i])
+            i -= 1
+
     return path
+
+
+
+# ====================================================== TEST
+
+
+"""
+n = 50
+random.seed(0)
+Env = [Point() for i in range(n)]
+aois = [random.uniform(0,50) for i in range(n)]
+thresholds = [random.uniform(0,50) for i in range(n)]
+aoi_w = random.uniform(0,1)
+v_w = random.uniform(0,1)
+drone_pos = Point(x=0.0, y=0.0, z=0.0)
+
+path = find_patrol_route(Env,aois,thresholds,aoi_w, v_w,drone_pos, loop=True)
+#print(path)
+"""
