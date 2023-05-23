@@ -3,7 +3,7 @@ import random
 
 from threading import Thread
 import numpy as np
-from sklearn.cluster import KMeans
+from sklearn.cluster import SpectralClustering, KMeans
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
@@ -14,7 +14,7 @@ from iot_project_interfaces.srv import TaskAssignment
 from iot_project_solution_interfaces.action import PatrollingAction
 from iot_project_interfaces.msg import TargetsTimeLeft
 
-from .ant_colony import optimise_ant_colony
+from .ant_colony import find_patrol_route
 
 class TaskAssigner(Node):
 
@@ -107,7 +107,7 @@ class TaskAssigner(Node):
 
         # here we compute the clusters for each drone
         tmp_array = np.array([(a.x,a.y,a.z) for a in task.target_positions])
-        clustering_method = KMeans(n_clusters=task.no_drones,random_state=0, n_init='auto').fit(tmp_array)
+        clustering_method = SpectralClustering(n_clusters=task.no_drones,random_state=0, n_init='auto').fit(tmp_array)
         
         #need to assign drone based on distance to cluster and sort each cluster to get optimal order of visit
         
@@ -179,46 +179,16 @@ class TaskAssigner(Node):
             # NEED TO CALL TASK ASSIGNER AND GET TASK UPDATE
             drone_cluster = self.target_clusters[drone_id]
             drone_pos = self.drone_pos[drone_id]
-            min_dist = float("inf")
-            for i in range(len(drone_cluster)):
-                # get the global index of the point
-                global_point_index = self.cluster_map[drone_id][i]
-                target_time_left = round(float(self.targets_time_left[global_point_index] / 10**9),2)
-                # compute the AoI of the point
-                point_aoi = self.thresholds[global_point_index] - target_time_left
-                # get the threshold for the point
-                aoi_threshold = self.thresholds[global_point_index]
-                dist = calculate_target_priority(drone_pos, self.targets[global_point_index], point_aoi, aoi_threshold, self.aoi_w, self.violation_w, alpha=0.1, beta=1.0)
-                if dist < min_dist:
-                    min_dist = dist
-                    target_i = global_point_index
-            targets_to_patrol = [self.targets[target_i]]
 
-                
-            """ # Compute target with maximum priority
-            for i in range(len(drone_cluster)):
-                # get the global index of the point
-                global_point_index = self.cluster_map[drone_id][i]
-                target_time_left = round(float(self.targets_time_left[global_point_index] / 10**9),2)
-                # compute the AoI of the point
-                point_aoi = self.thresholds[global_point_index] - target_time_left
-                # get the threshold for the point
-                aoi_threshold = self.thresholds[global_point_index]
-                # append points to the list in order 
-                # this way they have corresponding indexes to the array of points drone_cluster
-                aois.append(point_aoi)
-                thresholds.append(aoi_threshold)
+            # Here we decide which strategy to use
+            # maybe change based on number of drones/targets?
+
+            #targets_to_patrol = self.greedy_patrol(drone_cluster,drone_id,drone_pos)
+            targets_to_patrol = self.ant_patrol(drone_cluster,drone_id,drone_pos)   
             
-            # compute a near-optimal path for the drone
-            # we do this in advance to save time
-            path = optimise_ant_colony(drone_cluster, aois, thresholds, self.aoi_w, self.violation_w, drone_pos)
-            # save the path for later
-            self.patrol_routes[drone_id] = path
-            # assign the previously saved path to the drone
-            # because now the drone is free
-            targets_to_patrol = self.patrol_routes[drone_id]
+            # Compute target with maximum priority
             # update the drone's position
-            self.drone_pos[drone_id] = targets_to_patrol[-1] """
+            self.drone_pos[drone_id] = targets_to_patrol[-1]
 
         patrol_task = PatrollingAction.Goal()
         #patrol_task.targets = targets_to_patrol
@@ -230,7 +200,46 @@ class TaskAssigner(Node):
         # the additional arguments ad-hoc and then calls the actual callback function
         patrol_future.add_done_callback(lambda future, d = drone_id : self.patrol_submitted_callback(future, d))
 
-
+    def greedy_patrol(self,drone_cluster,drone_id,drone_pos):
+            min_dist = float("inf")
+            for i in range(len(drone_cluster)):
+                # get the global index of the point
+                global_point_index = self.cluster_map[drone_id][i]
+                target_time_left = round(float(self.targets_time_left[global_point_index] / 10**9),2)
+                # compute the AoI of the point
+                point_aoi = self.thresholds[global_point_index] - target_time_left
+                # get the threshold for the point
+                aoi_threshold = self.thresholds[global_point_index]
+                dist = calculate_target_priority(drone_pos, self.targets[global_point_index], point_aoi, aoi_threshold, self.aoi_w, self.violation_w, alpha=2.0, beta=1.0)
+                if dist < min_dist:
+                    min_dist = dist
+                    target_i = global_point_index
+            return [self.targets[target_i]]
+    
+    def ant_patrol(self,drone_cluster,drone_id,drone_pos):
+        aois= []
+        thresholds = []
+        for i in range(len(drone_cluster)):
+            # get the global index of the point
+            global_point_index = self.cluster_map[drone_id][i]
+            target_time_left = round(float(self.targets_time_left[global_point_index] / 10**9),2)
+            # compute the AoI of the point
+            point_aoi = self.thresholds[global_point_index] - target_time_left
+            # get the threshold for the point
+            aoi_threshold = self.thresholds[global_point_index]
+            # append points to the list in order 
+            # this way they have corresponding indexes to the array of points drone_cluster
+            aois.append(point_aoi)
+            thresholds.append(aoi_threshold)
+        # compute a near-optimal path for the drone
+        # we do this in advance to save time
+        path = find_patrol_route(drone_cluster, aois, thresholds, self.aoi_w, self.violation_w, drone_pos)
+        # save the path for later
+        self.patrol_routes[drone_id] = path
+        # assign the previously saved path to the drone
+        # because now the drone is free
+        return self.patrol_routes[drone_id]
+    
     # Callback used to verify if the action has been accepted.
     # If it did, prepares a callback for when the action gets completed
     def patrol_submitted_callback(self, future, drone_id):
@@ -262,7 +271,7 @@ class TaskAssigner(Node):
         self.targets_time_left = msg.times
 
 
-def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_threshold2 : float, aoi_weight : float, violation_weight : float, alpha=1.0, beta=1.0) -> float:
+def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_threshold2 : float, aoi_weight : float, violation_weight : float, alpha=2.0, beta=1.0) -> float:
     """
     Computes the inverse priority of reaching point2 from point1, depending on the current scenario of the simulation.
     
@@ -278,7 +287,7 @@ def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_
     p2 = np.array((point2.x, point2.y, point2.z))
     
     euclidean = np.linalg.norm(p1 - p2)
-    print("[MESSAGE] Euclidean norm: %s" % euclidean)
+    #print("[MESSAGE] Euclidean norm: %s" % euclidean)
     # if violation_weight > aoi_weight:
     if True:
         if (aoi_threshold2 - aoi2) < 0: # constraint violated
@@ -291,7 +300,7 @@ def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_
         aoi_bonus = aoi2
     
     result = -(aoi_bonus*beta) / (euclidean*alpha)
-    print("[MESSAGE] Inverse priority:", result)
+    #print("[MESSAGE] Inverse priority:", result)
     return result
         
 def main():
