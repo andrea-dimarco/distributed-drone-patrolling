@@ -16,6 +16,9 @@ from iot_project_interfaces.msg import TargetsTimeLeft
 
 from .ant_colony import find_patrol_route
 
+ALPHA = 0.1 # distance weight - the smaller alpha, the higher the distance weight
+BETA = 1.0  # aoi_bonus weight
+
 class TaskAssigner(Node):
 
     def __init__(self):
@@ -107,7 +110,9 @@ class TaskAssigner(Node):
 
         # here we compute the clusters for each drone
         tmp_array = np.array([(a.x,a.y,a.z) for a in task.target_positions])
-        clustering_method = SpectralClustering(n_clusters=task.no_drones,random_state=0, n_init='auto').fit(tmp_array)
+
+        # clustering_method = KMeans(n_clusters=task.no_drones,random_state=0, n_init='auto').fit(tmp_array)
+        clustering_method = SpectralClustering(n_clusters=task.no_drones).fit(tmp_array)
         
         #need to assign drone based on distance to cluster and sort each cluster to get optimal order of visit
         
@@ -169,7 +174,6 @@ class TaskAssigner(Node):
 
         self.idle[drone_id] = False
         print("[MESSAGE] ASSIGNINING TARGETS")
-        target_i = None 
 
         # start computing patrol routes in advance
         # because the computation might take time
@@ -202,6 +206,7 @@ class TaskAssigner(Node):
 
     def greedy_patrol(self,drone_cluster,drone_id,drone_pos):
             min_dist = float("inf")
+            target_i = None
             for i in range(len(drone_cluster)):
                 # get the global index of the point
                 global_point_index = self.cluster_map[drone_id][i]
@@ -210,7 +215,7 @@ class TaskAssigner(Node):
                 point_aoi = self.thresholds[global_point_index] - target_time_left
                 # get the threshold for the point
                 aoi_threshold = self.thresholds[global_point_index]
-                dist = calculate_target_priority(drone_pos, self.targets[global_point_index], point_aoi, aoi_threshold, self.aoi_w, self.violation_w, alpha=2.0, beta=1.0)
+                dist = calculate_target_priority(drone_pos, self.targets[global_point_index], point_aoi, aoi_threshold, self.aoi_w, self.violation_w, alpha=ALPHA, beta=BETA)
                 if dist < min_dist:
                     min_dist = dist
                     target_i = global_point_index
@@ -271,7 +276,7 @@ class TaskAssigner(Node):
         self.targets_time_left = msg.times
 
 
-def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_threshold2 : float, aoi_weight : float, violation_weight : float, alpha=2.0, beta=1.0) -> float:
+def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_threshold2 : float, aoi_weight : float, violation_weight : float, alpha=2.0, beta=1.0, eps=0.0000001) -> float:
     """
     Computes the inverse priority of reaching point2 from point1, depending on the current scenario of the simulation.
     
@@ -289,17 +294,24 @@ def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_
     euclidean = np.linalg.norm(p1 - p2)
     #print("[MESSAGE] Euclidean norm: %s" % euclidean)
     # if violation_weight > aoi_weight:
-    if True:
-        if (aoi_threshold2 - aoi2) < 0: # constraint violated
-            aoi_bonus = (aoi2/aoi_threshold2) * abs(aoi_threshold2 - aoi2)
-        elif (aoi_threshold2 - aoi2) == 0: # we don't want to deal with 0
-            aoi_bonus = 1.0
-        else: # legal
-            aoi_bonus = (aoi2/aoi_threshold2) * (1 / (aoi_threshold2 - aoi2))
-    else:
-        aoi_bonus = aoi2
     
-    result = -(aoi_bonus*beta) / (euclidean*alpha)
+    
+    # POLICY 1
+    """
+    if (aoi_threshold2 - aoi2) < 0: # constraint violated
+        aoi_bonus = (aoi2/aoi_threshold2) * abs(aoi_threshold2 - aoi2)
+    elif (aoi_threshold2 - aoi2) == 0: # we don't want to deal with 0
+        aoi_bonus = 1.0
+    else: # legal
+        aoi_bonus = (aoi2/aoi_threshold2) * (1 / (aoi_threshold2 - aoi2))
+    """
+    # POLICY 2
+    aoi_bonus = aoi2/aoi_threshold2
+
+    
+    # result = (aoi_bonus*beta + eps) / (euclidean*alpha)
+    result = (aoi_bonus*beta + eps) / (np.exp(euclidean  * alpha))
+
     #print("[MESSAGE] Inverse priority:", result)
     return result
         
