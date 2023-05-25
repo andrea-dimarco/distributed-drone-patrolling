@@ -4,6 +4,7 @@ import random
 from threading import Thread
 import numpy as np
 from sklearn.cluster import SpectralClustering, KMeans
+from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
@@ -58,6 +59,7 @@ class TaskAssigner(Node):
             self.store_targets_time_left_callback,
             10
         )
+        
 
     # Function used to wait for the current task. After receiving the task, it submits
     # to all the drone topics
@@ -86,11 +88,11 @@ class TaskAssigner(Node):
         task : TaskAssignment.Response = assignment_future.result()
 
         self.task = task
+        self.targets = task.target_positions
         self.no_drones = task.no_drones
         for i in range(self.no_drones):
-            self.drone_pos.append(Point(x=0.0, y=0.0, z=0.0))
-
-        self.targets = task.target_positions
+            # se le posizioni dei droni vengono assegnate diversamente  vi voglio male!
+            self.drone_pos.append(Point(x=0.0, y=(-self.no_drones + 1 + 2.0 * i) , z=0.0))
         self.thresholds = task.target_thresholds
         #can't directly use Point object
         self.thresholds_dict = {tuple((k.x,k.y,k.z)):v for k,v in zip(self.targets, self.thresholds)}
@@ -108,25 +110,26 @@ class TaskAssigner(Node):
         ### dictionary with paths to assign to drones
         self.patrol_routes = { drone_id : [] for drone_id in range(self.no_drones)}
 
-        # here we compute the clusters for each drone
-        tmp_array = np.array([(a.x,a.y,a.z) for a in task.target_positions])
+        if self.no_drones < len(self.targets):
+            # here we compute the clusters for each drone
+            tmp_array = np.array([(a.x,a.y,a.z) for a in task.target_positions])
+            # clustering_method = KMeans(n_clusters=self.no_drones,random_state=0, n_init='auto').fit(tmp_array)
+            clustering_method = SpectralClustering(n_clusters=self.no_drones).fit(tmp_array)
+            #need to assign drone based on distance to cluster and sort each cluster to get optimal order of visit
+            tmp_cluster = [tmp_array[clustering_method.labels_ == a] for a in range(self.no_drones)]
+            # converting to Point matrix
+            self.target_clusters = [[Point(x=el[0],y=el[1],z=el[2]) for el in cluster] for cluster in tmp_cluster]
+            self.cluster_map = [[self.targets.index(p) for p in cluster] for cluster in self.target_clusters]
+            print("[MESSAGE] Printing Cluster Map",self.cluster_map)
 
-        # clustering_method = KMeans(n_clusters=task.no_drones,random_state=0, n_init='auto').fit(tmp_array)
-        clustering_method = SpectralClustering(n_clusters=task.no_drones).fit(tmp_array)
-        
-        #need to assign drone based on distance to cluster and sort each cluster to get optimal order of visit
-        
-        tmp_cluster = [tmp_array[clustering_method.labels_ == a] for a in range(self.no_drones)]
-
-        # converting to Point matrix
-        self.target_clusters = [[Point(x=el[0],y=el[1],z=el[2]) for el in cluster] for cluster in tmp_cluster]
-
-        self.cluster_map = [[self.targets.index(p) for p in cluster] for cluster in self.target_clusters]
-        
-        print("[MESSAGE] Printing Cluster Map",self.cluster_map)
+        elif self.no_drones >= len(self.targets):
+            self.no_drones = min(self.no_drones, len(self.targets))
+            self.target_clusters = [[point] for point in self.targets]
+            self.cluster_map = [[index] for index in range(len(self.targets))]
 
         # Now create a client for the action server of each drone
         for d in range(self.no_drones):
+            print("[MESSAGE] CREATED ACTION SERVER", d)
             self.action_servers.append(
                 ActionClient(
                     self,
@@ -276,7 +279,7 @@ class TaskAssigner(Node):
         self.targets_time_left = msg.times
 
 
-def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_threshold2 : float, aoi_weight : float, violation_weight : float, alpha=2.0, beta=1.0, eps=0.0000001) -> float:
+def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_threshold2 : float, aoi_weight : float, violation_weight : float, alpha=0.1, beta=1.0, eps=0.0000001) -> float:
     """
     Computes the inverse priority of reaching point2 from point1, depending on the current scenario of the simulation.
     
@@ -307,10 +310,9 @@ def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_
     """
     # POLICY 2
     aoi_bonus = aoi2/aoi_threshold2
-
     
     # result = (aoi_bonus*beta + eps) / (euclidean*alpha)
-    result = (aoi_bonus*beta + eps) / (np.exp(euclidean  * alpha))
+    result = -(aoi_bonus*beta + eps) / (np.exp(euclidean  * alpha))
 
     #print("[MESSAGE] Inverse priority:", result)
     return result
