@@ -1,0 +1,26 @@
+# simulation that runs for only 3 minutes
+simulation_name: Quick Simulation
+
+# specifies the number of drones in the simulation
+no_drones:2
+
+# specifies simulation time in seconds
+simulation_time:180
+
+# specifies targets positions changed 5 to 15 in third p
+target_positions:(9,8,5);(8,9,6);(11,10,7);(7,10,4);(9,10,4);(9,8,4);(9,9,6);(10,11,3);(10,10,5);(10,9,6);(-10,-10,7);(-9,-10,8);(-11,-11,8);(-12,-14,2);(-10,-12,6);(-10,-11,3);(-10,-7,7);(-11,-8,5);(-10,-9,8);(-9,-10,5)
+
+# specifies threshold values for every target
+threshold_values:20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20
+
+# specifies aoi weight
+aoi_weight:1.0
+
+# specifies violation weight
+violation_weight:1.0
+
+# specifies the fairness' weight
+fairness_weight:1.0
+
+# specifies wind direction and strength
+wind_vector:(0,0,0)
