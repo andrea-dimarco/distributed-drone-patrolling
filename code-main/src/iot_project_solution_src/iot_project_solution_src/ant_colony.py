@@ -36,7 +36,7 @@ def from_tuple_to_point(p):
 def ant_dist(point1, point2,
                 aoi2, aoi_threshold2,
                 aoi_weight, violation_weight,
-                alpha=1.0, beta=0.1, dist_fn=None) -> float:
+                alpha=0.1, beta=1.0, dist_fn=None) -> float:
     """
     Computes the inverse priority of reaching point2 from point1, depending on the current scenario of the simulation.
     
@@ -54,8 +54,10 @@ def ant_dist(point1, point2,
     #euclidean = np.linalg.norm(p1 - p2)
 
     euclidean = math.sqrt( ((point1[0]-point2[0])**2) + ((point1[1]-point2[1])**2) + ((point1[2]-point2[2])**2) )
+    if euclidean == 0.0: return 0.0001
     ### debug
     #print("[MESSAGE] Euclidean norm: %s" % euclidean)
+    '''
     if (aoi_threshold2 - aoi2) < 0: # constraint violated
         aoi_bonus = (aoi2/aoi_threshold2) * abs(aoi_threshold2 - aoi2)
     elif (aoi_threshold2 - aoi2) == 0: # we don't want to deal with 0
@@ -69,8 +71,14 @@ def ant_dist(point1, point2,
         print("euclidean: " + str(euclidean) + "| aoi_bonus: " + str(aoi_bonus))
         dist = (euclidean*alpha) - (aoi_bonus*beta) if aoi_bonus > 0.0 else (euclidean*alpha)
     ### debug
+    '''
+    aoi_bonus = aoi2/aoi_threshold2
+    
+    # result = (aoi_bonus*beta + eps) / (euclidean*alpha)
+    result = -(aoi_bonus*beta + 0.0000001) / (np.exp(euclidean  * alpha))
+    return result if (result != 0.0) else 0.00001
     #print("[MESSAGE] Priority:", -priority)
-    return dist if (dist != 0.0) else 0.00001
+    #return dist if (dist != 0.0) else 0.00001
 
 def path_lenght(path,
                   aois, thresholds,

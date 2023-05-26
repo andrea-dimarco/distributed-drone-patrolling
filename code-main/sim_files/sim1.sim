@@ -7,7 +7,7 @@ no_drones:4
 # specifies simulation time in seconds
 simulation_time:180
 
-# specifies targets positions
+# specifies targets positions changed 5 to 15 in third p
 target_positions:(10,10,5);(10,9,6);(9,8,5);(-10,-8,7);(-9,-10,8);(-10,-10,6)
 
 # specifies threshold values for every target
