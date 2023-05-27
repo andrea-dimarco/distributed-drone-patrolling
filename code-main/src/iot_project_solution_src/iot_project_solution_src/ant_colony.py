@@ -67,7 +67,7 @@ def ant_dist(point1, point2,
     result = -(aoi_bonus*beta + eps) / (np.exp(euclidean  * alpha))
     return result if (result != 0.0) else eps
 
-def path_lenght(path,
+def path_length(path,
                   aois, thresholds,
                   aoi_weight, violation_weight,
                   alpha=1.0, beta=1.0, f_dist=ant_dist,
@@ -431,7 +431,7 @@ def AntColonyRunner(points, aois, thresholds, aoi_weight, violation_weight, dist
     for key in ['verbose', 'plot', 'animate', 'label', 'min_time', 'max_time']:
         if key in kwargs: del kwargs[key]
     print("N={:<3d} | {:5.0f} -> {:4.0f} | {:4.0f}s | ants: {:5d} | trips: {:4d} | "
-          .format(len(points), path_lenght(points, aois, thresholds, aoi_weight, violation_weight), path_lenght(result, aois, thresholds, aoi_weight, violation_weight), (stop_time - start_time), solver.ants_used, solver.round_trips)
+          .format(len(points), path_length(points, aois, thresholds, aoi_weight, violation_weight), path_length(result, aois, thresholds, aoi_weight, violation_weight), (stop_time - start_time), solver.ants_used, solver.round_trips)
           + " ".join([ f"{k}={v}" for k,v in kwargs.items() ])
     )
     return result

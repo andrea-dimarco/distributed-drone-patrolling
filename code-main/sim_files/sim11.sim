@@ -1,17 +1,17 @@
-# simulation name can be defined like this
-simulation_name:Simple Simulation
+# simulation that runs for only 3 minutes
+simulation_name: Quick Simulation
 
 # specifies the number of drones in the simulation
 no_drones:3
 
 # specifies simulation time in seconds
-simulation_time:300
+simulation_time:180
 
-# specifies targets positions
-target_positions:(-5,-5,3);(-5,2,7);(7,7,7);(3,-5,6);(5,5,7)
+# specifies targets positions changed 5 to 15 in third p
+target_positions:(5,7,3);(4,6,4);(5,4,5);(-5,1,8);(-3,2,5);(-5,-6,4);(-2,-7,5);(5,-8,7)
 
 # specifies threshold values for every target
-threshold_values:25,30,25,25,30
+threshold_values:20,20,20,20,20
 
 # specifies aoi weight
 aoi_weight:1.0
