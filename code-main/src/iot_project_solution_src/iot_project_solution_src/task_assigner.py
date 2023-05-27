@@ -52,7 +52,7 @@ class TaskAssigner(Node):
         self.drone_curr_targets = []    # will be a list of lists
         self.targets_aoi = []
         self.targets_locks = []
-        self.wind_vector
+        self.wind_vector = []
         ###
 
         self.cluster_list = []
@@ -168,9 +168,11 @@ class TaskAssigner(Node):
             # if the cluster is small use greedy
             if len(cluster) < 3:
                 self.use_greedy.append(True)
+                print("CLUSTER IS VERY SMALL")
             else:
                 # if there is wind use greedy
-                if self.wind_vector != [0,0,0]:
+                if self.wind_vector.x != 0.0 or self.wind_vector.y != 0.0 or self.wind_vector.z != 0.0:
+                    print("THERE IS WIND", self.wind_vector)
                     self.use_greedy.append(True)
                 else:
                     cluster_indexes = self.get_global_target_index(i)
@@ -179,9 +181,11 @@ class TaskAssigner(Node):
                     max_threshold = max(cluster_threshold)
                     # if the difference between thresholds is too high use greedy
                     if max_threshold - min_threshold >= 10:
+                        print("[MESSAGE] THRESHOLD DIFFERENCE",max_threshold - min_threshold)
                         self.use_greedy.append(True)
                     # just use ant
                     else:
+                        print("ANT REVOLUTION")
                         self.use_greedy.append(False)
 
         self.targets_time_left_topic = self.create_subscription(
@@ -271,8 +275,10 @@ class TaskAssigner(Node):
             #      maybe max distance between any two targets
 
             if self.use_greedy[drone_id]:
+                print("[MESSAGE] GREEDY")
                 targets_to_patrol = self.greedy_patrol(drone_id)
             else:
+                print("[MESSAGE] ANT")
                 targets_to_patrol = self.ant_patrol(self.get_global_target_index(drone_id), drone_id)    
 
         ###
@@ -332,7 +338,7 @@ class TaskAssigner(Node):
         thresholds = np.array(self.thresholds)[tar_prio_idx]
         # compute a near-optimal path for the drone
         # we do this in advance to save time
-        path = find_patrol_route(np.array(self.targets)[tar_prio_idx], aois, thresholds, self.aoi_w, self.violation_w, self.drone_pos[drone_id],alpha=ALPHA,beta=BETA,ant_count=32)
+        path = find_patrol_route(np.array(self.targets)[tar_prio_idx], aois, thresholds, self.aoi_w, self.violation_w, self.drone_pos[drone_id],alpha=ALPHA,beta=BETA,ant_count=64)
         # save the path for later
         self.patrol_routes[drone_id] = path
         # assign the previously saved path to the drone
@@ -443,7 +449,7 @@ def main():
     executor.add_node(task_assigner)
 
     task_assigner.get_task_and_subscribe_to_drones()
-    #time.sleep(0.5)
+    time.sleep(0.5)
     task_assigner.keep_patrolling()
 
     executor.spin()
