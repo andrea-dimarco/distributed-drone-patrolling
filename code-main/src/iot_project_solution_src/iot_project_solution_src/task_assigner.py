@@ -54,6 +54,7 @@ class TaskAssigner(Node):
         self.targets_locks = []
         ###
 
+        self.cluster_list = []
 
         self.task_announcer = self.create_client(
             TaskAssignment,
@@ -138,6 +139,14 @@ class TaskAssigner(Node):
             if self.no_drones > len(self.targets):
                 self.cluster_labels += [None for i in range(self.no_drones - len(self.targets))]
         
+        # create cluster matrix
+        for d in range(self.no_drones):
+            targets_cluster = np.array(self.targets)[self.cluster_labels == d]
+            self.cluster_list.append(targets_cluster)
+                
+        # sort cluster matrix based on y coordinate of cluster centroids
+        self.cluster_list.sort(key= lambda array: self.get_centroid(array)[1])
+        
         self.targets_time_left_topic = self.create_subscription(
             TargetsTimeLeft,
             '/task_assigner/targets_time_left',
@@ -156,8 +165,14 @@ class TaskAssigner(Node):
             )
 
         ###
-
-
+    # given a list of points it returns the centroid
+    def get_centroid(self,point_list: list[Point]):
+        x_components = [x.x for x in point_list]
+        y_components = [x.y for x in point_list]
+        z_components = [x.z for x in point_list]
+        centroid = (np.mean(x_components),np.mean(y_components), np.mean(z_components))
+        return centroid
+    
     # This method starts on a separate thread an ever-going patrolling task, it does that
     # by checking the idle state value of every drone and submitting a new goal as soon as
     # that value goes back to True
@@ -169,9 +184,8 @@ class TaskAssigner(Node):
                     if self.idle[d]:
                         ###
                         # assign cluster to drone
-                        targets_cluster = np.array(self.targets)[self.cluster_labels == d]
-
-                        Thread(target=self.submit_task, args=(d, targets_cluster)).start()
+                        #targets_cluster = np.array(self.targets)[self.cluster_labels == d]
+                        Thread(target=self.submit_task, args=(d,)).start()
                         ###
                 time.sleep(0.1)
 
@@ -191,7 +205,7 @@ class TaskAssigner(Node):
     #      visit of each target can be read from the array last_visits in the service message.
     #      The simulation time is already stored in self.sim_time for you to use in case
     #      Times are all in nanoseconds.
-    def submit_task(self, drone_id, targets_to_patrol):
+    def submit_task(self, drone_id, targets_to_patrol=None):
 
         self.get_logger().info("Submitting task for drone X3_%s" % drone_id)
     
@@ -203,30 +217,23 @@ class TaskAssigner(Node):
         ###
         self.targets_locks[self.drone_curr_targets[drone_id]] = False
 
-        if targets_to_patrol.size == 1:
-            targets_to_patrol = [targets_to_patrol[0]]
+        # if cluster is only one target, just assign it as target to patrol
+        if self.cluster_list[drone_id].size == 1:
+            targets_to_patrol = [self.cluster_list[drone_id][0]]
+        # cluster has more element and we decide which strategy to adopt
         else:
-            # returns an array of tuples (priority, index) for each target CONDSIDERED
-            tar_priorities = np.array([(calculate_target_priority(self.drone_pos[drone_id],
-                                                                     self.targets[i],
-                                                                     self.targets_aoi[i],
-                                                                     self.thresholds[i],
-                                                                     self.aoi_w,
-                                                                     self.violation_w,
-                                                                     alpha=ALPHA,
-                                                                     beta=BETA), i) # index i
-                                                                     for i, v in enumerate(self.targets)
-                                                                     if self.cluster_labels[i] == drone_id
-                                                                     and i != self.drone_curr_targets[drone_id]
-                                                                     and not self.targets_locks[drone_id]
-                                                                     ])
-
             targets_to_patrol = []
-            if tar_priorities.size > 0:
-                # targets_to_patrol = self.greedy_patrol(tar_priorities, drone_id)
-                targets_to_patrol = self.ant_patrol((tar_priorities[:,1]).astype(int), drone_id)    
-        ###
 
+            # TODO add condition based on number of targets in cluster 
+            #      and in cluster average distance
+
+            if len(self.cluster_list[drone_id]) < 10:
+                targets_to_patrol = self.greedy_patrol(drone_id)
+            else:
+                targets_to_patrol = self.ant_patrol(self.get_global_target_index(drone_id), drone_id)    
+
+        ###
+        print("TESTING BRANCH")
         patrol_task =  PatrollingAction.Goal()
         patrol_task.targets = targets_to_patrol
 
@@ -237,18 +244,49 @@ class TaskAssigner(Node):
         # the additional arguments ad-hoc and then calls the actual callback function
         patrol_future.add_done_callback(lambda future, d = drone_id : self.patrol_submitted_callback(future, d))
 
-    def greedy_patrol(self, tar_priorities, drone_id):
-        chosen_target_idx = tar_priorities[np.argmin(tar_priorities[:,0])][1].astype(int)
+    def get_global_target_index(self,drone_id: int) -> list[int]:
+        '''
+            Given a drone id, it returns a list of the global indexes of all elements of the associated cluster
+        '''
+        return [self.targets.index(i) for i in self.cluster_list[drone_id]]
+
+    def greedy_patrol(self, drone_id):
+        '''
+            Returns the next target to visit in a greedy way
+        '''
+        target_priorities = []
+        # for each global target id in the drone cluster
+        for i in self.get_global_target_index(drone_id):
+            # if it's not current target AND if it's not locked
+            if  i != self.drone_curr_targets[drone_id] and not self.targets_locks[drone_id]:
+                # get the priority
+                priority = calculate_target_priority(self.drone_pos[drone_id], 
+                                                     self.targets[i], 
+                                                     self.targets_aoi[i], 
+                                                     self.thresholds[i], 
+                                                     self.aoi_w, 
+                                                     self.violation_w,
+                                                     alpha=ALPHA,
+                                                     beta=BETA)
+                # append 
+                target_priorities.append((priority,i))
+        print("TARGET PRIORITY",target_priorities)
+        # get target id with maximum priority, min gets the tuple with min priority
+        chosen_target_idx = min(target_priorities,key= lambda x: x[0])[1]
+        #chosen_target_idx = target_priorities[np.argmin(target_priorities[:,0])][1].astype(int)
         self.drone_curr_targets[drone_id] = [chosen_target_idx]
         self.targets_locks[chosen_target_idx] = True   # take target lock
         return [self.targets[chosen_target_idx]]    # target to patrol
     
     def ant_patrol(self, tar_prio_idx, drone_id):
+        '''
+            Computes the quasi optimal path using the ACA
+        '''
         aois = np.array(self.targets_aoi)[tar_prio_idx]
         thresholds = np.array(self.thresholds)[tar_prio_idx]
         # compute a near-optimal path for the drone
         # we do this in advance to save time
-        path = find_patrol_route(np.array(self.targets)[tar_prio_idx], aois, thresholds, self.aoi_w, self.violation_w, self.drone_pos[drone_id])
+        path = find_patrol_route(np.array(self.targets)[tar_prio_idx], aois, thresholds, self.aoi_w, self.violation_w, self.drone_pos[drone_id],alpha=ALPHA,beta=BETA,ant_count=32)
         # save the path for later
         self.patrol_routes[drone_id] = path
         # assign the previously saved path to the drone
