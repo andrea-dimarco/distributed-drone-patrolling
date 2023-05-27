@@ -55,8 +55,8 @@ class TaskAssigner(Node):
         self.wind_vector = []
         ###
 
-        self.cluster_list = []
-        self.use_greedy = [] # list to decide strategy for each cluster
+        self.cluster_list = [] # list to contain each cluster. Len is the same as number of drones
+        self.use_greedy = [] # bool list to decide strategy for each cluster
 
         self.task_announcer = self.create_client(
             TaskAssignment,
@@ -107,6 +107,7 @@ class TaskAssigner(Node):
 
         # drone position at the start of the simulation
         self.drone_pos = [Point(x=0.0, y=(-self.no_drones + 1 + 2.0 * i) , z=0.0) for i in range(self.no_drones)]
+        
         self.drone_curr_targets = [None] * self.no_drones
         self.targets_aoi = [0] * len(self.targets)
         self.targets_locks = np.array([False] * len(self.targets))
@@ -121,7 +122,7 @@ class TaskAssigner(Node):
         self.fairness_w = task.fairness_weight
         self.aoi_w = task.aoi_weight
 
-        # get wind
+        # wind vector to decide strategy
         self.wind_vector = task.wind_vector
 
         # create a subscriber to the Odometry topic to retrive position for each drone
@@ -133,26 +134,33 @@ class TaskAssigner(Node):
                 10
             )
 
+        # flag to check if we can skip creation of cluster list
         single_cluster_flag = False
+
+        # if there are more targets then drones we use KMeans
         if self.no_drones < len(self.targets):
             # convert targets coords from Points to tuples
             targets_coords = np.array([(i.x, i.y, i.z) for i in self.targets]).astype(int)
             # compute clusters
             self.clusters = KMeans(n_clusters=task.no_drones,random_state=0, n_init='auto').fit(targets_coords)
             self.cluster_labels = self.clusters.labels_
+        # else we just assign labels and reduce number of active drones
         else:
-            print("[MESSAGE] NUMBER OF DRONES GREATER THAN NUM OF TARGETS")
+
+            #print("[MESSAGE] NUMBER OF DRONES GREATER THAN NUM OF TARGETS")
             self.cluster_labels = [i for i in range(len(self.targets))]
             self.no_drones = min(self.no_drones, len(self.targets))
             single_cluster_flag = True
         
-        print("[MESSAGE] NUMBER OF DRONES AFTER IF",self.no_drones)
-        print("[MESSAGE] CLUSTER LABELS AFTER IF", self.cluster_labels)
-        # create cluster matrix
+        #print("[MESSAGE] NUMBER OF DRONES AFTER IF",self.no_drones)
+        #print("[MESSAGE] CLUSTER LABELS AFTER IF", self.cluster_labels)
+        
+        # create cluster list
         if single_cluster_flag:
             self.cluster_list = [[x] for x in self.targets]
         else:
             for d in range(self.no_drones):
+                # here we extract points from self.targets based on elements of cluster labels
                 targets_cluster = np.array(self.targets)[self.cluster_labels == d]
                 print("[MESSAGE] TARGET CLUSTER", targets_cluster)
                 self.cluster_list.append(targets_cluster)
@@ -179,7 +187,7 @@ class TaskAssigner(Node):
                     cluster_threshold = [self.thresholds[i] for i in cluster_indexes]
                     min_threshold = min(cluster_threshold)
                     max_threshold = max(cluster_threshold)
-                    # if the difference between thresholds is too high use greedy
+                    # if the difference between min and max thresholds is too high use greedy
                     if max_threshold - min_threshold >= 10:
                         print("[MESSAGE] THRESHOLD DIFFERENCE",max_threshold - min_threshold)
                         self.use_greedy.append(True)
@@ -188,6 +196,7 @@ class TaskAssigner(Node):
                         print("ANT REVOLUTION")
                         self.use_greedy.append(False)
 
+        # create subscription to get actual aoi
         self.targets_time_left_topic = self.create_subscription(
             TargetsTimeLeft,
             '/task_assigner/targets_time_left',
@@ -249,7 +258,8 @@ class TaskAssigner(Node):
     def submit_task(self, drone_id, targets_to_patrol=None):
 
         self.get_logger().info("Submitting task for drone X3_%s" % drone_id)
-        # if to avoid
+        
+        # if to avoid exception
         if not self.action_servers: 
             print("MESSAGE: EMPTY SERVER LIST")
             return
@@ -264,16 +274,14 @@ class TaskAssigner(Node):
 
         # if cluster is only one target, just assign it as target to patrol
         if len(self.cluster_list[drone_id]) == 1:
+            print("[MESSAGE]: SINGLE TARGET")
             targets_to_patrol = [self.cluster_list[drone_id][0]]
 
         # cluster has more element and we decide which strategy to adopt
         else:
             targets_to_patrol = []
 
-            # TODO add condition based on number of targets in cluster 
-            #      and in cluster average distance
-            #      maybe max distance between any two targets
-
+            # we check use_greedy array to decide
             if self.use_greedy[drone_id]:
                 print("[MESSAGE] GREEDY")
                 targets_to_patrol = self.greedy_patrol(drone_id)
@@ -281,7 +289,6 @@ class TaskAssigner(Node):
                 print("[MESSAGE] ANT")
                 targets_to_patrol = self.ant_patrol(self.get_global_target_index(drone_id), drone_id)    
 
-        ###
         patrol_task =  PatrollingAction.Goal()
         patrol_task.targets = targets_to_patrol
 
@@ -294,7 +301,7 @@ class TaskAssigner(Node):
 
     def get_global_target_index(self,drone_id: int) -> list[int]:
         '''
-            Given a drone id, it returns a list of the global indexes of all elements of the associated cluster
+            Given a drone id/cluster id, it returns a list of the global indexes of all elements of the associated cluster
         '''
         return [self.targets.index(i) for i in self.cluster_list[drone_id]]
 
@@ -317,14 +324,14 @@ class TaskAssigner(Node):
                                                      self.violation_w,
                                                      alpha=ALPHA,
                                                      beta=BETA)
-                # append 
+                # append tuple (priority, global index)
                 target_priorities.append((priority,i))
-        #print("TARGET PRIORITY",target_priorities)
+
         # get target id with maximum priority, min gets the tuple with min priority
-        print("[MESSAGE] TARGET PRIORITY", target_priorities)
+        #print("[MESSAGE] TARGET PRIORITY", target_priorities)
         chosen_target_idx = min(target_priorities,key= lambda x: x[0])[1]
 
-        print("[MESSAGE] CURRENT TARGETS",self.drone_curr_targets)
+        #print("[MESSAGE] CURRENT TARGETS",self.drone_curr_targets)
         self.drone_curr_targets[drone_id] = [chosen_target_idx]
         #self.targets_locks[chosen_target_idx] = True   # take target lock
         
@@ -449,6 +456,7 @@ def main():
     executor.add_node(task_assigner)
 
     task_assigner.get_task_and_subscribe_to_drones()
+    # we sleep because threads can be strange (maybe remove?)
     time.sleep(0.5)
     task_assigner.keep_patrolling()
 

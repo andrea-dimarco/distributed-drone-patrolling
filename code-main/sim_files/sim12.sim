@@ -1,4 +1,4 @@
-# simulation name can be defined like this
+# Tornado with no wind
 simulation_name:Tornado Drone
 
 # specifies the number of drones in the simulation

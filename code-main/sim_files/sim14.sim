@@ -1,5 +1,5 @@
-# simulation name can be defined like this
-simulation_name:Drone Number Is Larger
+# Sim with more drones than targets
+simulation_name:Sim 14
 
 # specifies the number of drones in the simulation
 no_drones:3
@@ -8,10 +8,10 @@ no_drones:3
 simulation_time:300
 
 # specifies targets positions
-target_positions:(-5,-5,3)
+target_positions:(-5,-5,3);(9,3,6)
 
 # specifies threshold values for every target
-threshold_values:25
+threshold_values:25,20
 
 # specifies aoi weight
 aoi_weight:1.0

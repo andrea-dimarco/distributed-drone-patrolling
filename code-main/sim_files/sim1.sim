@@ -1,4 +1,4 @@
-# simulation that runs for only 3 minutes
+# Smallish sim
 simulation_name: Quick Simulation
 
 # specifies the number of drones in the simulation

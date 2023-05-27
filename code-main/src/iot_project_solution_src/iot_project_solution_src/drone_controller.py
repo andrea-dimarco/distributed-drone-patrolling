@@ -94,7 +94,8 @@ class DroneController(Node):
             # rotate to target
             #self.rotate_to_target(target)
             # move to target
-            eps = 0.5 if self.wind_vector == [0,0,0] else 0.3
+            # reduce eps if there is wind NEED TO CHECK IF IT'S TOO MUCH
+            eps = 0.5 if (self.wind_vector.x == 0 and self.wind_vector.y == 0 and self.wind_vector.z == 0) else 0.3
             #print("[MESSAGE] eps:",eps)
             self.move_to_target(target,eps)
             # send feedback for the target reached

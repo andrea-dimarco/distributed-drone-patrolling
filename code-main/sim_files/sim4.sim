@@ -1,5 +1,5 @@
 # sim with 1 drone
-simulation_name:
+simulation_name: TSP
 
 # specifies the number of drones in the simulation
 no_drones:1

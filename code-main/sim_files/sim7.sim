@@ -1,4 +1,4 @@
-# simulation with 2 drones that should chase each others
+# Triangle topology
 simulation_name: Chase Simulation
 
 # specifies the number of drones in the simulation
