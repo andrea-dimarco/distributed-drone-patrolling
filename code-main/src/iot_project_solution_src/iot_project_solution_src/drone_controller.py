@@ -9,6 +9,7 @@ from rclpy.action.server import ServerGoalHandle
 from geometry_msgs.msg import Point, Vector3, Twist
 from nav_msgs.msg import Odometry
 from iot_project_solution_interfaces.action import PatrollingAction
+from iot_project_interfaces.srv import TaskAssignment
 
 from iot_project_solution_src.math_utils import *
 
@@ -28,7 +29,7 @@ class DroneController(Node):
 
         self.position = Point(x=0.0, y=0.0, z=0.0)
         self.yaw = 0
-
+        self.wind_vector = []
         self.cmd_vel_topic = self.create_publisher(
             Twist,
             'cmd_vel',
@@ -49,6 +50,22 @@ class DroneController(Node):
             self.patrol_action_callback
         )
 
+        self.task_announcer = self.create_client(
+            TaskAssignment,
+            '/task_assigner/get_task'
+        )
+
+    def get_wind_vector(self):
+        while not self.task_announcer.wait_for_service(timeout_sec = 1.0):
+            time.sleep(0.5)
+        assignment_future = self.task_announcer.call_async(TaskAssignment.Request())
+        assignment_future.add_done_callback(self.get_wind_callback)
+
+    def get_wind_callback(self, assignment_future):
+
+        task : TaskAssignment.Response = assignment_future.result()
+
+        self.wind_vector = task.wind_vector
 
     def store_position_callback(self, msg : Odometry):
         
@@ -77,7 +94,9 @@ class DroneController(Node):
             # rotate to target
             #self.rotate_to_target(target)
             # move to target
-            self.move_to_target(target)
+            eps = 0.5 if self.wind_vector == [0,0,0] else 0.3
+            #print("[MESSAGE] eps:",eps)
+            self.move_to_target(target,eps)
             # send feedback for the target reached
             self.report_target_reached(msg, count)
 
@@ -206,6 +225,7 @@ def main():
     drone_controller = DroneController()
 
     executor.add_node(drone_controller)
+    drone_controller.get_wind_vector()
     executor.spin()
 
     executor.shutdown()
