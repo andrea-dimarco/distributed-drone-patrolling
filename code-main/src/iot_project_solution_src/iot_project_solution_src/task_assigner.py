@@ -207,7 +207,10 @@ class TaskAssigner(Node):
     def submit_task(self, drone_id, targets_to_patrol=None):
 
         self.get_logger().info("Submitting task for drone X3_%s" % drone_id)
-    
+        # if to avoid
+        if not self.action_servers: 
+            print("MESSAGE: EMPTY SERVER LIST")
+            return
         while not self.action_servers[drone_id].wait_for_server(timeout_sec = 1.0):
             return
 
@@ -381,6 +384,7 @@ def main():
     executor.add_node(task_assigner)
 
     task_assigner.get_task_and_subscribe_to_drones()
+    #time.sleep(0.5)
     task_assigner.keep_patrolling()
 
     executor.spin()
