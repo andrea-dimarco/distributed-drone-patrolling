@@ -358,8 +358,9 @@ def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_
             aoi_bonus = (aoi2/aoi_threshold2) * (1 / (aoi_threshold2 - aoi2))
         """
         # POLICY 2
-        aoi_bonus = aoi2/aoi_threshold2
-        
+        #aoi_bonus = aoi2/aoi_threshold2
+        aoi_bonus = aoi2 * aoi_weight + (aoi2 - aoi_threshold2) * violation_weight
+        #
     else:
         aoi_bonus = aoi2
     
