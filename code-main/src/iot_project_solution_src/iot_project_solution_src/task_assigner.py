@@ -103,7 +103,7 @@ class TaskAssigner(Node):
         self.current_tasks = [None]*self.no_drones
         self.idle = [True] * self.no_drones
 
-        ###
+        # drone position at the start of the simulation
         self.drone_pos = [Point(x=0.0, y=(-self.no_drones + 1 + 2.0 * i) , z=0.0) for i in range(self.no_drones)]
         self.drone_curr_targets = [None] * self.no_drones
         self.targets_aoi = [0] * len(self.targets)
@@ -164,7 +164,6 @@ class TaskAssigner(Node):
                 )
             )
 
-        ###
     # given a list of points it returns the centroid
     def get_centroid(self,point_list: list[Point]):
         x_components = [x.x for x in point_list]
@@ -227,13 +226,12 @@ class TaskAssigner(Node):
             # TODO add condition based on number of targets in cluster 
             #      and in cluster average distance
 
-            if len(self.cluster_list[drone_id]) < 10:
+            if len(self.cluster_list[drone_id]) < 20:
                 targets_to_patrol = self.greedy_patrol(drone_id)
             else:
                 targets_to_patrol = self.ant_patrol(self.get_global_target_index(drone_id), drone_id)    
 
         ###
-        print("TESTING BRANCH")
         patrol_task =  PatrollingAction.Goal()
         patrol_task.targets = targets_to_patrol
 
@@ -270,7 +268,7 @@ class TaskAssigner(Node):
                                                      beta=BETA)
                 # append 
                 target_priorities.append((priority,i))
-        print("TARGET PRIORITY",target_priorities)
+        #print("TARGET PRIORITY",target_priorities)
         # get target id with maximum priority, min gets the tuple with min priority
         chosen_target_idx = min(target_priorities,key= lambda x: x[0])[1]
         #chosen_target_idx = target_priorities[np.argmin(target_priorities[:,0])][1].astype(int)
