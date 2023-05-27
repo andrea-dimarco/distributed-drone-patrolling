@@ -24,8 +24,8 @@ from .ant_colony import find_patrol_route
 
 
 # declare constants
-ALPHA = 0.1 # distance weigh: smaller alpha -> higher importance to have a small distance
-BETA = 1.0  # aoi_bonus weight
+ALPHA = 1.0 # distance weigh: smaller alpha -> higher importance to have a small distance
+BETA = 0.1  # aoi_bonus weight
 
 class TaskAssigner(Node):
 
@@ -217,7 +217,7 @@ class TaskAssigner(Node):
         self.idle[drone_id] = False
 
         ###
-        self.targets_locks[self.drone_curr_targets[drone_id]] = False
+        #self.targets_locks[self.drone_curr_targets[drone_id]] = False
 
         # if cluster is only one target, just assign it as target to patrol
         if self.cluster_list[drone_id].size == 1:
@@ -228,8 +228,9 @@ class TaskAssigner(Node):
 
             # TODO add condition based on number of targets in cluster 
             #      and in cluster average distance
+            #      maybe max distance between any two targets
 
-            if len(self.cluster_list[drone_id]) < 20:
+            if len(self.cluster_list[drone_id]) > 200:
                 targets_to_patrol = self.greedy_patrol(drone_id)
             else:
                 targets_to_patrol = self.ant_patrol(self.get_global_target_index(drone_id), drone_id)    
@@ -258,8 +259,9 @@ class TaskAssigner(Node):
         target_priorities = []
         # for each global target id in the drone cluster
         for i in self.get_global_target_index(drone_id):
+            print("[MESSAGE] GLOBAL TARGET INDEX",self.get_global_target_index(drone_id))
             # if it's not current target AND if it's not locked
-            if  i != self.drone_curr_targets[drone_id] and not self.targets_locks[drone_id]:
+            if  [i] != self.drone_curr_targets[drone_id]: #and not self.targets_locks[drone_id]:
                 # get the priority
                 priority = calculate_target_priority(self.drone_pos[drone_id], 
                                                      self.targets[i], 
@@ -273,10 +275,13 @@ class TaskAssigner(Node):
                 target_priorities.append((priority,i))
         #print("TARGET PRIORITY",target_priorities)
         # get target id with maximum priority, min gets the tuple with min priority
+        print("[MESSAGE] TARGET PRIORITY", target_priorities)
         chosen_target_idx = min(target_priorities,key= lambda x: x[0])[1]
-        #chosen_target_idx = target_priorities[np.argmin(target_priorities[:,0])][1].astype(int)
+
+        print("[MESSAGE] CURRENT TARGETS",self.drone_curr_targets)
         self.drone_curr_targets[drone_id] = [chosen_target_idx]
-        self.targets_locks[chosen_target_idx] = True   # take target lock
+        #self.targets_locks[chosen_target_idx] = True   # take target lock
+        
         return [self.targets[chosen_target_idx]]    # target to patrol
     
     def ant_patrol(self, tar_prio_idx, drone_id):
@@ -292,6 +297,7 @@ class TaskAssigner(Node):
         self.patrol_routes[drone_id] = path
         # assign the previously saved path to the drone
         # because now the drone is free
+        print("[MESSAGE] ANT COLONY PATH", path)
         return self.patrol_routes[drone_id]
         
 
@@ -349,27 +355,40 @@ def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_
     p2 = np.array((point2.x, point2.y, point2.z))
     
     euclidean = np.linalg.norm(p1 - p2)
-    # if violation_weight > aoi_weight:
-    if True:
-        # POLICY 1
-        """
-        if (aoi_threshold2 - aoi2) < 0: # constraint violated
-            aoi_bonus = (aoi2/aoi_threshold2) * abs(aoi_threshold2 - aoi2)
-        elif (aoi_threshold2 - aoi2) == 0: # we don't want to deal with 0
-            aoi_bonus = 1.0
-        else: # legal
-            aoi_bonus = (aoi2/aoi_threshold2) * (1 / (aoi_threshold2 - aoi2))
-        """
-        # POLICY 2
-        #aoi_bonus = aoi2/aoi_threshold2
-        aoi_bonus = aoi2 * aoi_weight + (aoi2 - aoi_threshold2) * violation_weight
-        #
-    else:
-        aoi_bonus = aoi2
-    
-    # result = (aoi_bonus*beta + eps) / (euclidean*alpha)
-    result = -(aoi_bonus*beta + eps) / (np.exp(euclidean  * alpha))
 
+    # bonus given to aoi
+    aoi_bonus = aoi2 * aoi2 * aoi_weight
+    # bonus based on how close the target is to violation
+    violation_bonus = (aoi2 - aoi_threshold2) * violation_weight
+    
+    # final bonus calculated based on aoi and violation bonus
+    # if this happens we just set the final bonus to violation_bonus
+    if aoi_bonus == 0:
+        final_bonus = violation_bonus
+
+    # in this case violation happened and we want violation to increase the final bonus
+    elif violation_bonus > 0:
+        if violation_bonus >= 1:
+            final_bonus = aoi_bonus * violation_bonus    
+        else:
+            final_bonus = aoi_bonus / violation_bonus
+            
+    # violation didn't happen
+    elif violation_bonus < 0:
+        # we don't want negative final bonus and we want a decrease in the final bonus
+        if abs(violation_bonus) >= 1:
+            final_bonus = aoi_bonus / abs(violation_bonus)  
+        else:
+            final_bonus = aoi_bonus * abs(violation_bonus) 
+            
+    elif violation_bonus == 0:
+        final_bonus = aoi_bonus
+    
+
+    # result = (aoi_bonus*beta + eps) / (euclidean*alpha)
+    #result = -(final_bonus*beta + eps) / (np.exp(euclidean  * alpha))
+    # priority is given by both distance and time bonus
+    result = (euclidean * alpha) - (final_bonus * beta)
     print("[MESSAGE]: priority of point:", point2, ": ", result, euclidean)
     return result
 

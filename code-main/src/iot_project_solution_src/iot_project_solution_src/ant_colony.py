@@ -48,23 +48,40 @@ def ant_dist(point1, point2,
 
     euclidean = math.sqrt( ((point1[0]-point2[0])**2) + ((point1[1]-point2[1])**2) + ((point1[2]-point2[2])**2) )
     if euclidean == 0.0: return eps
-    '''
-    if (aoi_threshold2 - aoi2) < 0: # constraint violated
-        aoi_bonus = (aoi2/aoi_threshold2) * abs(aoi_threshold2 - aoi2)
-    elif (aoi_threshold2 - aoi2) == 0: # we don't want to deal with 0
-        aoi_bonus = 1.0
-    else: # legal
-        aoi_bonus = (aoi2/aoi_threshold2) * (1 / (aoi_threshold2 - aoi2))
+    #aoi_bonus = aoi2/aoi_threshold2
+
+    # bonus given to aoi
+    aoi_bonus = aoi2 * aoi2 * aoi_weight
+    # bonus based on how close the target is to violation
+    violation_bonus = (aoi2 - aoi_threshold2) * violation_weight
     
-    if euclidean == 0.0: # we are measuring the distance between the same point so it must be 0 regardless of the bonus
-        dist = 0.0
-    else:
-        print("euclidean: " + str(euclidean) + "| aoi_bonus: " + str(aoi_bonus))
-        dist = (euclidean*alpha) - (aoi_bonus*beta) if aoi_bonus > 0.0 else (euclidean*alpha)
-    '''
-    aoi_bonus = aoi2/aoi_threshold2
+    # final bonus calculated based on aoi and violation bonus
+    if aoi_bonus == 0:
+        final_bonus = violation_bonus
+
+    # in this case violation happened and we want violation to increase the final bonus
+    elif violation_bonus > 0:
+        if violation_bonus >= 1:
+            final_bonus = aoi_bonus * violation_bonus    
+        else:
+            final_bonus = aoi_bonus / violation_bonus
+            
+    # violation didn't happen
+    elif violation_bonus < 0:
+        # we don't want negative final bonus and we want a decrease in the final bonus
+        if abs(violation_bonus) >= 1:
+            final_bonus = aoi_bonus / abs(violation_bonus)  
+        else:
+            final_bonus = aoi_bonus * abs(violation_bonus) 
+            
+    elif violation_bonus == 0:
+        final_bonus = aoi_bonus
     
-    result = -(aoi_bonus*beta + eps) / (np.exp(euclidean  * alpha))
+
+    # priority is given by both distance and time bonus
+    result = (euclidean * alpha) - (final_bonus * beta)
+
+    # control just to be safe
     return result if (result != 0.0) else eps
 
 def path_length(path,
@@ -427,13 +444,14 @@ def AntColonyRunner(points, aois, thresholds, aoi_weight, violation_weight, dist
     result     = solver.solve(points, aois, thresholds, aoi_weight, violation_weight)
     stop_time  = time.perf_counter()
     if label: kwargs = { **label, **kwargs }
-        
+    '''   
     for key in ['verbose', 'plot', 'animate', 'label', 'min_time', 'max_time']:
         if key in kwargs: del kwargs[key]
     print("N={:<3d} | {:5.0f} -> {:4.0f} | {:4.0f}s | ants: {:5d} | trips: {:4d} | "
           .format(len(points), path_length(points, aois, thresholds, aoi_weight, violation_weight), path_length(result, aois, thresholds, aoi_weight, violation_weight), (stop_time - start_time), solver.ants_used, solver.round_trips)
           + " ".join([ f"{k}={v}" for k,v in kwargs.items() ])
     )
+    '''
     return result
 
 
