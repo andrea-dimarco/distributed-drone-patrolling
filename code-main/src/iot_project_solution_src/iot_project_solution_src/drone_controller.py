@@ -209,11 +209,11 @@ class DroneController(Node):
             #current_angle = self.yaw
             
             # check yaw and mantain the same angle
-            if not (self.start_yaw - angle_eps < self.yaw < self.start_yaw + angle_eps):
-                rotation_dir = 1
-                if self.yaw > self.start_yaw + angle_eps:
-                    rotation_dir = -1
-                mov.angular = Vector3(x=0.0, y=0.0, z= (abs(self.yaw) - abs(self.start_yaw))*rotation_dir)
+            #if not (self.start_yaw - angle_eps < self.yaw < self.start_yaw + angle_eps):
+            #    rotation_dir = 1
+            #    if self.yaw > self.start_yaw + angle_eps:
+            #        rotation_dir = -1
+            #    mov.angular = Vector3(x=0.0, y=0.0, z= (abs(self.yaw) - abs(self.start_yaw))*rotation_dir)
                 
             #if not (angle-angle_eps < current_angle < angle+angle_eps):
             #    print("[MESSAGE] Correcting angle")
