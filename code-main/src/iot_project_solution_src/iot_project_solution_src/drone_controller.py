@@ -27,9 +27,14 @@ class DroneController(Node):
     def __init__(self):
         super().__init__("drone_controller")
 
+        
         self.position = Point(x=0.0, y=0.0, z=0.0)
         self.yaw = 0
         self.wind_vector = []
+
+        self.start_yaw_flag = False
+        self.start_yaw = 1.570796
+
         self.cmd_vel_topic = self.create_publisher(
             Twist,
             'cmd_vel',
@@ -76,6 +81,10 @@ class DroneController(Node):
             msg.pose.pose.orientation.z,
             msg.pose.pose.orientation.w
         )
+        if self.start_yaw_flag == False:
+            self.get_logger().info("First yaw: %f" % self.yaw) 
+            self.start_yaw = self.yaw
+            self.start_yaw_flag = True           
 
 
     def patrol_action_callback(self, msg : ServerGoalHandle):
@@ -198,7 +207,14 @@ class DroneController(Node):
 
             #angle = angle_between_points(current_position, objective_point)
             #current_angle = self.yaw
-
+            
+            # check yaw and mantain the same angle
+            if not (self.start_yaw - angle_eps < self.yaw < self.start_yaw + angle_eps):
+                rotation_dir = 1
+                if self.yaw > self.start_yaw + angle_eps:
+                    rotation_dir = -1
+                mov.angular = Vector3(x=0.0, y=0.0, z= (abs(self.yaw) - abs(self.start_yaw))*rotation_dir)
+                
             #if not (angle-angle_eps < current_angle < angle+angle_eps):
             #    print("[MESSAGE] Correcting angle")
             #    angle_diff = (current_angle-angle)

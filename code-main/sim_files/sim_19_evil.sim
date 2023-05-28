@@ -1,0 +1,26 @@
+# simulation name can be defined like this
+simulation_name:Sim Evil
+
+# specifies the number of drones in the simulation
+no_drones:2
+
+# specifies simulation time in seconds
+simulation_time:300
+
+# specifies targets positions
+target_positions:(2,-1,4);(2,-2,4);(2,-3,4);(2,1,4);(5,1,5);(5,2,5);(5,3,5);(5,-1,5)
+
+# specifies threshold values for every target
+threshold_values:30,30,30,10,30,30,30,5
+
+# specifies aoi weight
+aoi_weight:1.0
+
+# specifies violation weight
+violation_weight:1.0
+
+# specifies the fairness' weight
+fairness_weight:1.0
+
+# specifies wind direction and strength
+wind_vector:(0,0,0)
