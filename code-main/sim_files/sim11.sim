@@ -1,17 +1,17 @@
-# sim with unbalanced clusters
+# simulation that runs for only 3 minutes
 simulation_name: Quick Simulation
 
 # specifies the number of drones in the simulation
-no_drones:2
+no_drones:3
 
 # specifies simulation time in seconds
 simulation_time:180
 
 # specifies targets positions changed 5 to 15 in third p
-target_positions:(9,8,5);(8,9,6);(11,10,7);(7,10,4);(9,10,4);(9,8,4);(9,9,6);(10,11,3);(10,10,5);(10,9,6);(-10,-10,7);(-9,-10,8);(-11,-11,8);(-12,-14,2);(-10,-12,6);(-10,-11,3);(-10,-7,7);(-11,-8,5);(-10,-9,8);(-9,-10,5)
+target_positions:(5,7,3);(4,6,4);(5,4,5);(-5,1,8);(-3,2,5);(-5,-6,4);(-2,-7,5);(5,-8,7)
 
 # specifies threshold values for every target
-threshold_values:20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20,20
+threshold_values:20,20,20,20,20
 
 # specifies aoi weight
 aoi_weight:1.0

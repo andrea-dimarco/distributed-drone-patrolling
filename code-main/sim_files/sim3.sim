@@ -1,4 +1,4 @@
-#simulation with n^2 targets but fairness matters
+#Heavy sim
 simulation_name: Very Bad Simulation
 
 # specifies the number of drones in the simulation

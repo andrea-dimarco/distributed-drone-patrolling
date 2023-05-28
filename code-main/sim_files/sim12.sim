@@ -1,18 +1,17 @@
-# Lebensraum sim
-simulation_name:Heil Simulation
+# Tornado with no wind
+simulation_name:Tornado Drone
 
 # specifies the number of drones in the simulation
-no_drones:1
+no_drones:2
 
 # specifies simulation time in seconds
-simulation_time:130
+simulation_time:120
 
 # specifies targets positions
-target_positions:(0,0,5);(2,0,5);(-2,0,5);(4,0,5);(-4,0,5);(0,2,5);(0,-2,5);(0,4,5);(0,-4,5);(-4,2,5);(4,-2,5);(4,-4,5);(-4,-4,5);(2,4,5);(4,4,5);(-2,-4,5);(-4,4,5)
+target_positions:(20,0,10);(22,2,9);(24,4,7);(26,4,5);(28,3,3);(30,2,2);(4,0,1);(6,-2,1);(8,-4,2);(10,-5,3);(12,-6,5);(14,-6,7);(16,-4,9);(18,-2,10)
 
 # specifies threshold values for every target
-threshold_values:30,30,30,30,30,30,30,30,30,30,30,30,30,30,30
-
+threshold_values:30,30,30,30,30,30,30,30,30,30,30,30,30,30
 # specifies aoi weight
 aoi_weight:1.0
 
@@ -20,7 +19,7 @@ aoi_weight:1.0
 violation_weight:1.0
 
 # specifies the fairness' weight
-fairness_weight:1.0
+fairness_weight:0.0
 
 # specifies wind direction and strength
 wind_vector:(0,0,0)
