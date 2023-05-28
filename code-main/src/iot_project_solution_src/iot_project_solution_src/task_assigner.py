@@ -274,7 +274,7 @@ class TaskAssigner(Node):
 
         # if cluster is only one target, just assign it as target to patrol
         if len(self.cluster_list[drone_id]) == 1:
-            #print("[MESSAGE]: SINGLE TARGET")
+            print("[MESSAGE]: SINGLE TARGET")
             targets_to_patrol = [self.cluster_list[drone_id][0]]
 
         # cluster has more element and we decide which strategy to adopt
@@ -293,7 +293,8 @@ class TaskAssigner(Node):
         patrol_task.targets = targets_to_patrol
 
         patrol_future = self.action_servers[drone_id].send_goal_async(patrol_task)
-
+        print("DRONE %d" % drone_id)
+        print("TARGET", targets_to_patrol)
         # This is a new construct for you. Basically, callbacks have no way of receiving arguments except
         # for the future itself. We circumvent such problem by creating an inline lambda functon which stores
         # the additional arguments ad-hoc and then calls the actual callback function

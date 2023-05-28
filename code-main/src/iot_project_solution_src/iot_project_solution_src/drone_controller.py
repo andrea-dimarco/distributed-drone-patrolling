@@ -31,9 +31,8 @@ class DroneController(Node):
         self.position = Point(x=0.0, y=0.0, z=0.0)
         self.yaw = 0
         self.wind_vector = []
-
+        self.is_windy = False
         self.start_yaw_flag = False
-        self.start_yaw = 1.570796
 
         self.cmd_vel_topic = self.create_publisher(
             Twist,
@@ -71,6 +70,8 @@ class DroneController(Node):
         task : TaskAssignment.Response = assignment_future.result()
 
         self.wind_vector = task.wind_vector
+        self.is_windy = (self.wind_vector.x != 0 or self.wind_vector.y != 0 or self.wind_vector.z != 0)
+        
 
     def store_position_callback(self, msg : Odometry):
         
@@ -81,11 +82,6 @@ class DroneController(Node):
             msg.pose.pose.orientation.z,
             msg.pose.pose.orientation.w
         )
-        if self.start_yaw_flag == False:
-            self.get_logger().info("First yaw: %f" % self.yaw) 
-            self.start_yaw = self.yaw
-            self.start_yaw_flag = True           
-
 
     def patrol_action_callback(self, msg : ServerGoalHandle):
 
@@ -100,13 +96,8 @@ class DroneController(Node):
 
             count += 1
 
-            # rotate to target
-            #self.rotate_to_target(target)
             # move to target
-            # reduce eps if there is wind NEED TO CHECK IF IT'S TOO MUCH
-            eps = 0.5 if (self.wind_vector.x == 0 and self.wind_vector.y == 0 and self.wind_vector.z == 0) else 0.3
-            #print("[MESSAGE] eps:",eps)
-            self.move_to_target(target,eps)
+            self.move_to_target(target)
             # send feedback for the target reached
             self.report_target_reached(msg, count)
 
@@ -190,35 +181,18 @@ class DroneController(Node):
         self.cmd_vel_topic.publish(stop_msg)
 
     def move_to_target(self, target : Point, eps = 0.5, angle_eps = 0.05):
-
+        eps = 0.3 if self.is_windy else 0.5
+        print(self.is_windy)
         current_position = (self.position.x, self.position.y, self.position.z)
         objective_point = (target.x, target.y, target.z)
         while point_distance(current_position, objective_point) > eps:
 
             current_position = (self.position.x, self.position.y, self.position.z)
             direction_vector = unit_vector_between_points(current_position, objective_point)
-            # wind = get_wind_vector()
-            # dir = unit_vector_between_points(current_position, objective_point)
-            # direction_vector = Vector3(x=dir.x-wind.x, y=dir.y-wind.y, z=dir.z-wind.z)
             mov = Twist()
             mov.linear = Vector3(x=direction_vector[0], y=direction_vector[1], z=direction_vector[2])
-
             mov.angular = Vector3(x=0.0, y=0.0, z=0.0)
-
-            #angle = angle_between_points(current_position, objective_point)
-            #current_angle = self.yaw
             
-            # check yaw and mantain the same angle
-            #if not (self.start_yaw - angle_eps < self.yaw < self.start_yaw + angle_eps):
-            #    rotation_dir = 1
-            #    if self.yaw > self.start_yaw + angle_eps:
-            #        rotation_dir = -1
-            #    mov.angular = Vector3(x=0.0, y=0.0, z= (abs(self.yaw) - abs(self.start_yaw))*rotation_dir)
-                
-            #if not (angle-angle_eps < current_angle < angle+angle_eps):
-            #    print("[MESSAGE] Correcting angle")
-            #    angle_diff = (current_angle-angle)
-            #    mov.angular = Vector3(x=0.0, y=0.0, z=math.sin(angle_diff))
             self.cmd_vel_topic.publish(mov)
 
         stop_msg = Twist()
