@@ -162,13 +162,13 @@ class TaskAssigner(Node):
             for d in range(self.no_drones):
                 # here we extract points from self.targets based on elements of cluster labels
                 targets_cluster = np.array(self.targets)[self.cluster_labels == d]
-                print("[MESSAGE] TARGET CLUSTER", targets_cluster)
+                #print("[MESSAGE] TARGET CLUSTER", targets_cluster)
                 self.cluster_list.append(targets_cluster)
     
 
         # sort cluster matrix based on y coordinate of cluster centroids
         self.cluster_list.sort(key= lambda array: self.get_centroid(array)[1])
-        print("[MESSAGE] CLUSTERS", self.cluster_list)
+        #print("[MESSAGE] CLUSTERS", self.cluster_list)
 
         # decide strategy for each cluster
         for i in range(len(self.cluster_list)):
@@ -176,11 +176,11 @@ class TaskAssigner(Node):
             # if the cluster is small use greedy
             if len(cluster) < 3:
                 self.use_greedy.append(True)
-                print("CLUSTER IS VERY SMALL")
+                #print("CLUSTER IS VERY SMALL")
             else:
                 # if there is wind use greedy
                 if self.wind_vector.x != 0.0 or self.wind_vector.y != 0.0 or self.wind_vector.z != 0.0:
-                    print("THERE IS WIND", self.wind_vector)
+                    #print("THERE IS WIND", self.wind_vector)
                     self.use_greedy.append(True)
                 else:
                     cluster_indexes = self.get_global_target_index(i)
@@ -189,11 +189,11 @@ class TaskAssigner(Node):
                     max_threshold = max(cluster_threshold)
                     # if the difference between min and max thresholds is too high use greedy
                     if max_threshold - min_threshold >= 10:
-                        print("[MESSAGE] THRESHOLD DIFFERENCE",max_threshold - min_threshold)
+                        #print("[MESSAGE] THRESHOLD DIFFERENCE",max_threshold - min_threshold)
                         self.use_greedy.append(True)
                     # just use ant
                     else:
-                        print("ANT REVOLUTION")
+                        #print("ANT REVOLUTION")
                         self.use_greedy.append(False)
 
         # create subscription to get actual aoi
@@ -261,7 +261,7 @@ class TaskAssigner(Node):
         
         # if to avoid exception
         if not self.action_servers: 
-            print("MESSAGE: EMPTY SERVER LIST")
+            #print("MESSAGE: EMPTY SERVER LIST")
             return
         
         while not self.action_servers[drone_id].wait_for_server(timeout_sec = 1.0):
@@ -283,17 +283,18 @@ class TaskAssigner(Node):
 
             # we check use_greedy array to decide
             if self.use_greedy[drone_id]:
-                print("[MESSAGE] GREEDY")
+                #print("[MESSAGE] GREEDY")
                 targets_to_patrol = self.greedy_patrol(drone_id)
             else:
-                print("[MESSAGE] ANT")
+                #print("[MESSAGE] ANT")
                 targets_to_patrol = self.ant_patrol(self.get_global_target_index(drone_id), drone_id)    
 
         patrol_task =  PatrollingAction.Goal()
         patrol_task.targets = targets_to_patrol
 
         patrol_future = self.action_servers[drone_id].send_goal_async(patrol_task)
-
+        print("DRONE %d" % drone_id)
+        print("TARGET", targets_to_patrol)
         # This is a new construct for you. Basically, callbacks have no way of receiving arguments except
         # for the future itself. We circumvent such problem by creating an inline lambda functon which stores
         # the additional arguments ad-hoc and then calls the actual callback function
@@ -312,7 +313,7 @@ class TaskAssigner(Node):
         target_priorities = []
         # for each global target id in the drone cluster
         for i in self.get_global_target_index(drone_id):
-            print("[MESSAGE] GLOBAL TARGET INDEX",self.get_global_target_index(drone_id))
+            #print("[MESSAGE] GLOBAL TARGET INDEX",self.get_global_target_index(drone_id))
             # if it's not current target AND if it's not locked
             if  [i] != self.drone_curr_targets[drone_id]: #and not self.targets_locks[drone_id]:
                 # get the priority
@@ -350,7 +351,7 @@ class TaskAssigner(Node):
         self.patrol_routes[drone_id] = path
         # assign the previously saved path to the drone
         # because now the drone is free
-        print("[MESSAGE] ANT COLONY PATH", path)
+        #print("[MESSAGE] ANT COLONY PATH", path)
         return self.patrol_routes[drone_id]
         
 
@@ -442,7 +443,7 @@ def calculate_target_priority(point1 : Point, point2 : Point, aoi2 : float, aoi_
     #result = -(final_bonus*beta + eps) / (np.exp(euclidean  * alpha))
     # priority is given by both distance and time bonus
     result = (euclidean * alpha) - (final_bonus * beta)
-    print("[MESSAGE]: priority of point:", point2, ": ", result, euclidean)
+    #print("[MESSAGE]: priority of point:", point2, ": ", result, euclidean)
     return result
 
 def main():
