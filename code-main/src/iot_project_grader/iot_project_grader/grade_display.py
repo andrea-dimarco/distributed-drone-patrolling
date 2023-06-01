@@ -36,6 +36,7 @@ class GradeDisplay(Node):
         self.fairness_weight = 1.0
 
         # parameters for tracking the targets' values
+        self.no_targets = 0
         self.target_tags = []
         self.aoi_tags = []
 
@@ -47,6 +48,7 @@ class GradeDisplay(Node):
         self.timer_tag = "timer"
         self.metrics_tag = "metrics"
         self.score_tag = "score"
+        self.weighted_score_tag = "weighted_score"
         self.display_thread = None
 
         self.clock = 0
@@ -87,7 +89,7 @@ class GradeDisplay(Node):
         result : TaskAssignment.Response = res.result()
         self.simulation_name = result.simulation_name
         self.simulation_time = result.simulation_time
-        no_targets = len(result.target_positions)
+        self.no_targets = len(result.target_positions)
         self.last_visits = result.last_visits
         self.expiration_times = result.target_thresholds
 
@@ -96,12 +98,14 @@ class GradeDisplay(Node):
         self.fairness_weight = result.fairness_weight
 
 
-        if len(self.target_tags) == 0:
-            self.target_tags = ["target_%d" % i for i in range(no_targets)]
-            self.aoi_tags = ["aoi_%d" % i for i in range(no_targets)]
 
-            self.aoi_x_values = [[] for i in range(no_targets)]
-            self.aoi_y_values = [[] for i in range(no_targets)]
+
+        if len(self.target_tags) == 0:
+            self.target_tags = ["target_%d" % i for i in range(self.no_targets)]
+            self.aoi_tags = ["aoi_%d" % i for i in range(self.no_targets)]
+
+            self.aoi_x_values = [[] for i in range(self.no_targets)]
+            self.aoi_y_values = [[] for i in range(self.no_targets)]
 
     def store_time_callback(self, msg : Clock):
         self.clock = msg.clock.sec * 10**9 + msg.clock.nanosec
@@ -114,10 +118,11 @@ class GradeDisplay(Node):
         test = None
 
         ENTRY_WIDTH = 150
-        WINDOW_WIDTH = (ENTRY_WIDTH + 10)*len(self.target_tags) - 5
+        WINDOW_WIDTH = (ENTRY_WIDTH + 10)*len(self.target_tags)
         WINDOW_PADDING = 17
         WINDOW_WIDTH_INNER = WINDOW_WIDTH - WINDOW_PADDING
-        WINDOW_HEIGHT = 616
+        WINDOW_HEIGHT = 710
+
 
 
         dpg.create_context()
@@ -130,14 +135,14 @@ class GradeDisplay(Node):
 
             
             with dpg.group(horizontal=True):
-                for i in range(len(self.target_tags)):
+                for i in range(self.no_targets):
                     with dpg.group():
                         dpg.add_button(label="Target %d" % (i+1), width=ENTRY_WIDTH)
                         dpg.add_slider_float(tag=self.target_tags[i], max_value = self.expiration_times[i], width = ENTRY_WIDTH, height = 150, vertical = True)
 
             dpg.add_button(label = "Normalized AoI Values:", width = WINDOW_WIDTH_INNER )
             with dpg.group(horizontal=True):
-                for i in range(len(self.target_tags)):
+                for i in range(self.no_targets):
                         with dpg.plot(width=ENTRY_WIDTH, height=100):
                             with dpg.plot_axis(dpg.mvXAxis, label="Time", no_tick_labels=True):
                                 dpg.set_axis_limits(dpg.last_item(), 0, self.simulation_time)
@@ -154,6 +159,7 @@ class GradeDisplay(Node):
             dpg.add_button(tag=self.timer_tag, label = "TIMER", width = WINDOW_WIDTH_INNER, height = 60)
             dpg.add_button(tag=self.metrics_tag, label = "METRICS", width = WINDOW_WIDTH_INNER, height = 60)
             dpg.add_button(tag=self.score_tag, label = "SCORE", width = WINDOW_WIDTH_INNER, height = 90)
+            dpg.add_button(tag=self.weighted_score_tag, label = "WEIGHTED SCORE", width = WINDOW_WIDTH_INNER, height = 90)
 
 
         dpg.setup_dearpygui()
@@ -162,6 +168,11 @@ class GradeDisplay(Node):
         aoi_score = 0.0
         violation_malus = 0.0
         total_score = 0.0
+
+        max_total_score = 0.0
+        for i in range(self.no_targets):
+            threshold_noramlized = self.expiration_times[i] / self.simulation_time
+            max_total_score += (self.aoi_weight * threshold_noramlized + self.violation_weight * (1 - threshold_noramlized)) * (1 + self.fairness_weight) * self.simulation_time
 
         while dpg.is_dearpygui_running():
 
@@ -180,7 +191,7 @@ class GradeDisplay(Node):
 
             evaluated_fariness = 1
 
-            for t in range(len(self.last_visits)):
+            for t in range(self.no_targets):
 
                 if time_left == 0:
                     break
@@ -233,8 +244,10 @@ class GradeDisplay(Node):
             dpg.configure_item(self.metrics_tag, label="Cumulative AoI: \t\t\t %.2f\nCumulative Violation:\t\t%.2f\nEvaluated Fairness: \t\t %.2f" % (aoi_score, violation_malus, evaluated_fariness))
 
             score_with_fairness = total_score * (1 + evaluated_fariness * self.fairness_weight)
-
             dpg.configure_item(self.score_tag, label="SCORE: %.2f" % score_with_fairness)
+
+            weighted_score = score_with_fairness/max_total_score * 1000
+            dpg.configure_item(self.weighted_score_tag, label="WEIGHTED SCORE: %.2f" % weighted_score)
          
 
             dpg.render_dearpygui_frame()

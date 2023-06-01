@@ -1,26 +1,26 @@
 # simulation name can be defined like this
-simulation_name: Sim zero
+simulation_name:Stage 2-3
 
 # specifies the number of drones in the simulation
-no_drones:1
+no_drones:4
 
 # specifies simulation time in seconds
-simulation_time:300
+simulation_time:120
 
 # specifies targets positions
-target_positions:(0,0,7)
+target_positions:(-15,-15,3);(-15,-3,7);(21,21,7);(9,-15,6);(15,15,7);(21,24,10);(-18,24,8);(-3,9,6);(-18,-12,5);(24,-24,8)
 
 # specifies threshold values for every target
-threshold_values:25
+threshold_values:2,120,120,2,120,120,120,2,120,2
 
 # specifies aoi weight
-aoi_weight:1.0
+aoi_weight:0.0
 
 # specifies violation weight
 violation_weight:1.0
 
 # specifies the fairness' weight
-fairness_weight:1.0
+fairness_weight:0.0
 
 # specifies wind direction and strength
-wind_vector:(0,2,0)
+wind_vector:(0,0,0)

@@ -65,6 +65,18 @@ def generate_launch_description():
         )
     )
 
+    #-------------------------------- Bridge for the world control -------------------------------
+
+    targets_to_spawn.append(
+        Node(
+            package="ros_gz_bridge",
+            executable="parameter_bridge",
+            arguments=[
+                "/world/%s/control@ros_gz_interfaces/srv/ControlWorld" % WORLD_NAME
+            ]
+        )
+    )
+
 
     #-------- Spawns drones and bridges all the cmd_vel and odometry topics of the drones --------
     for target_count in range(simulation_config.no_drones):

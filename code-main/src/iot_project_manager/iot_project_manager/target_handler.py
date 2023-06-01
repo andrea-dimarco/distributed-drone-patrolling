@@ -9,6 +9,8 @@ from iot_project_interfaces.srv import ColorTarget
 
 
 from geometry_msgs.msg import Point, Vector3
+from ros_gz_interfaces.srv import ControlWorld
+
 from threading import Thread
 
 from rclpy.executors import MultiThreadedExecutor
@@ -21,6 +23,8 @@ import iot_project.sim_utils as sim_utils
 
 
 TARGET_EPS = 0.8
+TIME_BEFORE_PLAY = 10
+GAZEBO_WORLD = "iot_project_world"
 
 
 class TargetHandler(Node):
@@ -61,7 +65,7 @@ class TargetHandler(Node):
 
         self.time_subscriber = self.create_subscription(
             Clock,
-            '/world/iot_project_world/clock',
+            '/world/%s/clock' % GAZEBO_WORLD,
             self.store_time_callback,
             10
         )
@@ -69,6 +73,12 @@ class TargetHandler(Node):
         self.color_changer_service = self.create_client(
             ColorTarget,
             'iot_animator/change_color'
+        )
+
+
+        self.world_client = self.create_client(
+            ControlWorld,
+            '/world/%s/control' % GAZEBO_WORLD
         )
 
 
@@ -85,12 +95,25 @@ class TargetHandler(Node):
         self.get_logger().info("Target handler started. Task can be retrieved from service /task_assigner/get_task")
 
         self.create_timer(0.1, self.publish_targets_time)
+        self.simulation_start_timer = self.create_timer(TIME_BEFORE_PLAY, self.start_simulation)
 
         Thread(target=self.start_tester).start()
 
 
-    def start_tester(self):
+    def start_simulation(self):
 
+        self.world_client.wait_for_service()
+
+        msg = ControlWorld.Request()
+        msg.world_control.pause = False
+        
+        self.world_client.call_async(msg)
+        self.simulation_start_timer.destroy()
+
+        self.get_logger().info("Simulation will now play!")
+
+
+    def start_tester(self):
 
         self.get_logger().info("Starting tester")
 

@@ -33,6 +33,7 @@ class DroneController(Node):
         self.wind_vector = []
         self.is_windy = False
         self.start_yaw_flag = False
+        self.start_yaw = 1.5708
 
         self.cmd_vel_topic = self.create_publisher(
             Twist,
@@ -71,7 +72,7 @@ class DroneController(Node):
 
         self.wind_vector = task.wind_vector
         self.is_windy = (self.wind_vector.x != 0 or self.wind_vector.y != 0 or self.wind_vector.z != 0)
-        
+    
 
     def store_position_callback(self, msg : Odometry):
         
@@ -82,6 +83,10 @@ class DroneController(Node):
             msg.pose.pose.orientation.z,
             msg.pose.pose.orientation.w
         )
+        if not self.start_yaw_flag:
+            self.start_yaw = self.yaw
+            # self.get_logger().info("Starting yaw: %f" % self.start_yaw)
+            self.start_yaw_flag = True
 
     def patrol_action_callback(self, msg : ServerGoalHandle):
 
@@ -180,20 +185,28 @@ class DroneController(Node):
         stop_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
         self.cmd_vel_topic.publish(stop_msg)
 
-    def move_to_target(self, target : Point, eps = 0.5, angle_eps = 0.05):
-        eps = 0.3 if self.is_windy else 0.5
+    def move_to_target(self, target : Point, eps = 0.8, angle_eps = 0.01):
+        eps = 0.3 if self.is_windy else 0.8
         print(self.is_windy)
         current_position = (self.position.x, self.position.y, self.position.z)
         objective_point = (target.x, target.y, target.z)
         while point_distance(current_position, objective_point) > eps:
-
+              
             current_position = (self.position.x, self.position.y, self.position.z)
             direction_vector = unit_vector_between_points(current_position, objective_point)
             mov = Twist()
-            mov.linear = Vector3(x=direction_vector[0], y=direction_vector[1], z=direction_vector[2])
+            vel = 1     # drone speed
+            mov.linear = Vector3(x=direction_vector[0]*vel, y=direction_vector[1]*vel, z=direction_vector[2]*vel)
             mov.angular = Vector3(x=0.0, y=0.0, z=0.0)
+
+            if not (self.start_yaw - angle_eps < self.yaw < self.start_yaw + angle_eps):
+                # z_correction = -(self.start_yaw  - self.yaw) ??? not reversed ???
+                z_correction = self.yaw - self.start_yaw
+                # print("[MESSAGE]: Correction:", z_correction)
+                mov.angular = Vector3(x=0.0, y=0.0, z= z_correction)
             
             self.cmd_vel_topic.publish(mov)
+
 
         stop_msg = Twist()
         stop_msg.linear = Vector3(x=0.0, y=0.0, z=0.0)
